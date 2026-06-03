@@ -20,6 +20,9 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.10.0",
     "chokidar": "^5.0.0",
+    "tree-sitter-c-sharp": "^0.23.5",
+    "tree-sitter-cli": "^0.26.9",
+    "tree-sitter-wasms": "^0.1.13",
     "web-tree-sitter": "^0.26.9",
     "yaml": "^2.9.0"
   },
