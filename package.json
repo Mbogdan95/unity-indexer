@@ -1,0 +1,33 @@
+{
+  "name": "unity-indexer",
+  "version": "0.1.0",
+  "description": "Unity-specialized MCP server for token-efficient code exploration",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "unity-indexer": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.10.0",
+    "chokidar": "^5.0.0",
+    "web-tree-sitter": "^0.26.9",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}
