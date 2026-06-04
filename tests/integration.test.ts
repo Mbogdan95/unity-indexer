@@ -13,6 +13,7 @@ import {
   handleResolveGuid,
 } from "../src/mcp/tools.js";
 import { getProjectSummary, getProjectFiles } from "../src/mcp/resources.js";
+import { discoverUnityProjects, isUnityProject } from "../src/discovery.js";
 import { join } from "path";
 
 const FIXTURES = join(import.meta.dirname, "fixtures/TestProject");
@@ -107,5 +108,17 @@ describe("Integration: full pipeline", () => {
     expect(detail.token_hint).toBeGreaterThan(hierarchy.token_hint);
     expect(summary.token_hint).toBeGreaterThan(0);
     expect(hierarchy.token_hint).toBeGreaterThan(0);
+  });
+});
+
+describe("Integration: discovery", () => {
+  it("discovers the test fixture as a Unity project", () => {
+    expect(isUnityProject(FIXTURES)).toBe(true);
+  });
+
+  it("finds TestProject from parent directory", () => {
+    const fixturesParent = join(import.meta.dirname, "fixtures");
+    const results = discoverUnityProjects(fixturesParent);
+    expect(results).toContain(FIXTURES);
   });
 });
