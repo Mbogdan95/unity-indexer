@@ -31,6 +31,8 @@ function log(msg: string): void {
 }
 
 export class Indexer {
+  private guidToClassCache: Map<string, string> | null = null;
+
   constructor(
     private store: Store,
     private projectRoot: string,
@@ -51,19 +53,23 @@ export class Indexer {
     log(`indexing ${metaFiles.length} meta files...`);
     this.indexBatch(metaFiles);
 
-    // Group remaining files by type for progress
-    const byType = new Map<string, string[]>();
-    for (const f of otherFiles) {
-      const t = detectFileType(f) ?? 'unknown';
-      const arr = byType.get(t) ?? [];
-      arr.push(f);
-      byType.set(t, arr);
-    }
+    // Index scripts before scenes/prefabs so guidToClassMap is populated
+    const scripts = otherFiles.filter(f => f.endsWith('.cs'));
+    const asmdefs = otherFiles.filter(f => f.endsWith('.asmdef'));
+    const assets = otherFiles.filter(f => f.endsWith('.asset'));
+    const scenesAndPrefabs = otherFiles.filter(f => f.endsWith('.unity') || f.endsWith('.prefab'));
 
-    for (const [type, batch] of byType) {
-      log(`indexing ${batch.length} ${type} files...`);
-      this.indexBatch(batch);
-    }
+    if (scripts.length) { log(`indexing ${scripts.length} script files...`); this.indexBatch(scripts); }
+    if (asmdefs.length) { log(`indexing ${asmdefs.length} asmdef files...`); this.indexBatch(asmdefs); }
+    if (assets.length) { log(`indexing ${assets.length} asset files...`); this.indexBatch(assets); }
+
+    // Build guid→class map once now that all scripts + metas are indexed
+    log('building GUID → class map...');
+    this.guidToClassCache = this.buildGuidToClassMap();
+
+    if (scenesAndPrefabs.length) { log(`indexing ${scenesAndPrefabs.length} scene/prefab files...`); this.indexBatch(scenesAndPrefabs); }
+
+    this.guidToClassCache = null;
 
     log('recomputing reference counts...');
     this.store.recomputeReferenceCounts();
@@ -236,7 +242,7 @@ export class Indexer {
 
   private indexScene(fileId: number, relativePath: string, content: string): void {
     const parsed = parseScene(content);
-    const guidToClass = this.buildGuidToClassMap();
+    const guidToClass = this.guidToClassCache ?? this.buildGuidToClassMap();
 
     this.storeGameObjects(fileId, parsed.gameObjects, guidToClass);
     this.storeReferences(fileId, parsed.references);
@@ -273,7 +279,7 @@ export class Indexer {
 
   private indexPrefab(fileId: number, relativePath: string, content: string): void {
     const parsed = parsePrefab(content);
-    const guidToClass = this.buildGuidToClassMap();
+    const guidToClass = this.guidToClassCache ?? this.buildGuidToClassMap();
 
     this.storeGameObjects(fileId, parsed.gameObjects, guidToClass);
     this.storeReferences(fileId, parsed.references);
