@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync, mkdirSync, writeFileSync } from "fs";
+import { readdirSync, statSync, mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 
 const SKIP_DIRS = new Set([
@@ -12,8 +12,16 @@ const SKIP_DIRS = new Set([
   "Builds",
 ]);
 
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 export function isUnityProject(dir: string): boolean {
-  return existsSync(join(dir, "Assets")) && existsSync(join(dir, "ProjectSettings"));
+  return isDirectory(join(dir, "Assets")) && isDirectory(join(dir, "ProjectSettings"));
 }
 
 export function discoverUnityProjects(rootDir: string, maxDepth: number = 3): string[] {

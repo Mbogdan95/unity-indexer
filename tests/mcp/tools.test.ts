@@ -12,6 +12,7 @@ import {
   handleGetGameObject,
   handleResolveGuid,
   handleFindComponents,
+  type StoreResolver,
 } from "../../src/mcp/tools.js";
 import { join } from "path";
 
@@ -249,5 +250,31 @@ describe("handleFindComponents", () => {
     expect(result.components).toBeDefined();
     const components = result.components as unknown[];
     expect(components.length).toBeGreaterThan(0);
+  });
+});
+
+describe("StoreResolver", () => {
+  it("auto-resolves when single project", () => {
+    const resolver: StoreResolver = (name?: string) => {
+      if (name !== undefined && name !== "") throw new Error("unexpected name");
+      return store;
+    };
+    expect(resolver()).toBe(store);
+  });
+
+  it("resolves by project name", () => {
+    const resolver: StoreResolver = (name?: string) => {
+      if (name === "TestProject") return store;
+      throw new Error(`Unknown project "${String(name)}"`);
+    };
+    expect(resolver("TestProject")).toBe(store);
+  });
+
+  it("throws for unknown project name", () => {
+    const resolver: StoreResolver = (name?: string) => {
+      if (name === "TestProject") return store;
+      throw new Error(`Unknown project "${String(name)}"`);
+    };
+    expect(() => resolver("Nonexistent")).toThrow('Unknown project "Nonexistent"');
   });
 });
