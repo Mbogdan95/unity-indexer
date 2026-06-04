@@ -595,11 +595,36 @@ export class Indexer {
       `${prefabCount} prefab${prefabCount !== 1 ? 's' : ''}, ` +
       `and ${scriptCount} script${scriptCount !== 1 ? 's' : ''}.`;
 
+    // Hot scripts: most-referenced script files
+    const topRefs = this.store.getTopReferencedFiles(10);
+    const hotScripts: string[] = [];
+    for (const ref of topRefs) {
+      if (ref.incoming_count === 0) continue;
+      const file = this.store.getFileById(ref.file_id);
+      if (file?.type === 'meta') {
+        const assetPath = file.path.endsWith('.meta') ? file.path.slice(0, -5) : file.path;
+        const assetFile = this.store.getFileByPath(assetPath);
+        if (assetFile?.type === 'script') {
+          const script = this.store.listScripts().find(s => s.file_id === assetFile.id);
+          if (script) hotScripts.push(script.class_name);
+        }
+      }
+    }
+
+    // Assembly structure: dependency graph
+    const assemblies = this.store.listAssemblies();
+    const assemblyStructure: Record<string, string[]> = {};
+    for (const asm of assemblies) {
+      assemblyStructure[asm.name] = JSON.parse(asm.references) as string[];
+    }
+
     this.store.updateProjectSummary({
       file_counts: JSON.stringify(fileCounts),
       scene_count: sceneCount,
       prefab_count: prefabCount,
       script_count: scriptCount,
+      assembly_structure: JSON.stringify(assemblyStructure),
+      hot_scripts: JSON.stringify(hotScripts),
       description,
       indexed_at: new Date().toISOString(),
     });

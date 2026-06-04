@@ -342,10 +342,14 @@ export function handleResolveGuid(
   }
 
   const file = store.getFileById(guidRow.file_id);
+  let path = file?.path ?? null;
+  if (path?.endsWith('.meta')) {
+    path = path.slice(0, -5);
+  }
   return {
     token_hint: 10,
     guid: guidRow.guid,
-    path: file?.path ?? null,
+    path,
     asset_type: guidRow.asset_type,
   };
 }
@@ -407,9 +411,7 @@ export function handleFindComponents(
     token_hint: components.length * 5,
     type: params.type,
     components: components.map(c => {
-      // Find the GO name
-      const allGOs = fileId ? store.getGameObjectsByFile(fileId) : [];
-      const go = allGOs.find(g => g.id === c.game_object_id);
+      const go = store.getGameObjectById(c.game_object_id);
       return {
         game_object_id: c.game_object_id,
         game_object_name: go?.name ?? null,

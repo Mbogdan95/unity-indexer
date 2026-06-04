@@ -201,6 +201,13 @@ export class Store {
     return rows.map(goRowOut);
   }
 
+  getGameObjectById(id: number): (GameObjectRow & { id: number }) | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM game_objects WHERE id = ?')
+      .get(id) as Record<string, unknown> | undefined;
+    return row ? goRowOut(row) : undefined;
+  }
+
   getGameObjectByName(
     fileId: number,
     name: string,
@@ -465,6 +472,21 @@ export class Store {
   // Assemblies
   // ---------------------------------------------------------------------------
 
+  listAssemblies(): (AssemblyRow & { id: number })[] {
+    const rows = this.db
+      .prepare('SELECT * FROM assemblies ORDER BY name')
+      .all() as Record<string, unknown>[];
+    return rows.map(row => ({
+      id: row.id as number,
+      file_id: row.file_id as number,
+      name: row.name as string,
+      references: row.references as string,
+      defines: row.defines as string,
+      platforms: row.platforms as string,
+      dependency_summary: row.dependency_summary as string,
+    }));
+  }
+
   insertAssembly(asm: AssemblyRow): number {
     const stmt = this.db.prepare(`
       INSERT INTO assemblies
@@ -552,6 +574,12 @@ export class Store {
   // ---------------------------------------------------------------------------
   // Reference Counts
   // ---------------------------------------------------------------------------
+
+  getTopReferencedFiles(limit = 10): { file_id: number; guid: string; incoming_count: number }[] {
+    return this.db
+      .prepare('SELECT * FROM reference_counts ORDER BY incoming_count DESC LIMIT ?')
+      .all(limit) as { file_id: number; guid: string; incoming_count: number }[];
+  }
 
   recomputeReferenceCounts(): void {
     this.db.exec(`
