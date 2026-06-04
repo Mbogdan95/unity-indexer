@@ -19,8 +19,8 @@ export function parseUnityYaml(content: string): UnityYamlDocument[] {
 
     let data: Record<string, unknown> = {};
     try {
-      const doc = parseDocument(raw.body, { uniqueKeys: false, maxAliasCount: -1 });
-      data = doc.toJSON() ?? {};
+      const doc = parseDocument(raw.body, { uniqueKeys: false });
+      data = doc.toJS({ maxAliasCount: -1 }) ?? {};
     } catch {
       data = parseYamlFallback(raw.body);
     }

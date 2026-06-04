@@ -590,11 +590,17 @@ export class Indexer {
     const prefabCount = fileCounts['prefab'] ?? 0;
     const scriptCount = fileCounts['script'] ?? 0;
 
+    const description =
+      `Unity project with ${sceneCount} scene${sceneCount !== 1 ? 's' : ''}, ` +
+      `${prefabCount} prefab${prefabCount !== 1 ? 's' : ''}, ` +
+      `and ${scriptCount} script${scriptCount !== 1 ? 's' : ''}.`;
+
     this.store.updateProjectSummary({
       file_counts: JSON.stringify(fileCounts),
       scene_count: sceneCount,
       prefab_count: prefabCount,
       script_count: scriptCount,
+      description,
       indexed_at: new Date().toISOString(),
     });
   }
