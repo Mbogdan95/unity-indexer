@@ -1,83 +1,83 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { initScriptParser, parseScript } from '../../src/parsers/script-parser.js';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { describe, it, expect, beforeAll } from "vitest";
+import { initScriptParser, parseScript } from "../../src/parsers/script-parser.js";
+import { readFileSync } from "fs";
+import { join } from "path";
 
-const FIXTURES = join(import.meta.dirname, '../fixtures/TestProject/Assets');
+const FIXTURES = join(import.meta.dirname, "../fixtures/TestProject/Assets");
 
 beforeAll(async () => {
   await initScriptParser();
 });
 
-describe('parseScript', () => {
-  it('extracts class declarations from C# file', () => {
-    const content = readFileSync(join(FIXTURES, 'Scripts/PlayerController.cs'), 'utf-8');
+describe("parseScript", () => {
+  it("extracts class declarations from C# file", () => {
+    const content = readFileSync(join(FIXTURES, "Scripts/PlayerController.cs"), "utf-8");
     const results = parseScript(content);
     expect(results).toHaveLength(1);
-    expect(results[0].className).toBe('PlayerController');
-    expect(results[0].kind).toBe('class');
+    expect(results[0].className).toBe("PlayerController");
+    expect(results[0].kind).toBe("class");
   });
 
-  it('extracts namespace', () => {
-    const content = readFileSync(join(FIXTURES, 'Scripts/PlayerController.cs'), 'utf-8');
+  it("extracts namespace", () => {
+    const content = readFileSync(join(FIXTURES, "Scripts/PlayerController.cs"), "utf-8");
     const results = parseScript(content);
-    expect(results[0].namespace).toBe('MyGame.Player');
+    expect(results[0].namespace).toBe("MyGame.Player");
   });
 
-  it('extracts base class and interfaces', () => {
-    const content = readFileSync(join(FIXTURES, 'Scripts/PlayerController.cs'), 'utf-8');
+  it("extracts base class and interfaces", () => {
+    const content = readFileSync(join(FIXTURES, "Scripts/PlayerController.cs"), "utf-8");
     const results = parseScript(content);
-    expect(results[0].baseClass).toBe('MonoBehaviour');
-    expect(results[0].interfaces).toContain('IDamageable');
+    expect(results[0].baseClass).toBe("MonoBehaviour");
+    expect(results[0].interfaces).toContain("IDamageable");
   });
 
-  it('detects MonoBehaviour', () => {
-    const content = readFileSync(join(FIXTURES, 'Scripts/PlayerController.cs'), 'utf-8');
+  it("detects MonoBehaviour", () => {
+    const content = readFileSync(join(FIXTURES, "Scripts/PlayerController.cs"), "utf-8");
     const results = parseScript(content);
     expect(results[0].isMonoBehaviour).toBe(true);
   });
 
-  it('extracts method signatures', () => {
-    const content = readFileSync(join(FIXTURES, 'Scripts/PlayerController.cs'), 'utf-8');
+  it("extracts method signatures", () => {
+    const content = readFileSync(join(FIXTURES, "Scripts/PlayerController.cs"), "utf-8");
     const results = parseScript(content);
-    const methods = results[0].members.filter(m => m.kind === 'method');
-    const takeDamage = methods.find(m => m.name === 'TakeDamage');
+    const methods = results[0].members.filter((m) => m.kind === "method");
+    const takeDamage = methods.find((m) => m.name === "TakeDamage");
     expect(takeDamage).toBeDefined();
-    expect(takeDamage!.access).toBe('public');
-    expect(takeDamage!.returnType).toBe('void');
-    expect(takeDamage!.parameters).toEqual([{ name: 'amount', type: 'int' }]);
+    expect(takeDamage!.access).toBe("public");
+    expect(takeDamage!.returnType).toBe("void");
+    expect(takeDamage!.parameters).toEqual([{ name: "amount", type: "int" }]);
   });
 
-  it('extracts fields with attributes', () => {
-    const content = readFileSync(join(FIXTURES, 'Scripts/PlayerController.cs'), 'utf-8');
+  it("extracts fields with attributes", () => {
+    const content = readFileSync(join(FIXTURES, "Scripts/PlayerController.cs"), "utf-8");
     const results = parseScript(content);
-    const fields = results[0].members.filter(m => m.kind === 'field');
-    const speed = fields.find(m => m.name === 'speed');
+    const fields = results[0].members.filter((m) => m.kind === "field");
+    const speed = fields.find((m) => m.name === "speed");
     expect(speed).toBeDefined();
-    expect(speed!.attributes).toContain('SerializeField');
-    expect(speed!.returnType).toBe('float');
+    expect(speed!.attributes).toContain("SerializeField");
+    expect(speed!.returnType).toBe("float");
   });
 
-  it('extracts properties', () => {
-    const content = readFileSync(join(FIXTURES, 'Scripts/PlayerController.cs'), 'utf-8');
+  it("extracts properties", () => {
+    const content = readFileSync(join(FIXTURES, "Scripts/PlayerController.cs"), "utf-8");
     const results = parseScript(content);
-    const props = results[0].members.filter(m => m.kind === 'property');
-    const isAlive = props.find(m => m.name === 'IsAlive');
+    const props = results[0].members.filter((m) => m.kind === "property");
+    const isAlive = props.find((m) => m.name === "IsAlive");
     expect(isAlive).toBeDefined();
-    expect(isAlive!.access).toBe('public');
-    expect(isAlive!.returnType).toBe('bool');
+    expect(isAlive!.access).toBe("public");
+    expect(isAlive!.returnType).toBe("bool");
   });
 
-  it('parses interface files', () => {
-    const content = readFileSync(join(FIXTURES, 'Scripts/IDamageable.cs'), 'utf-8');
+  it("parses interface files", () => {
+    const content = readFileSync(join(FIXTURES, "Scripts/IDamageable.cs"), "utf-8");
     const results = parseScript(content);
     expect(results).toHaveLength(1);
-    expect(results[0].className).toBe('IDamageable');
-    expect(results[0].kind).toBe('interface');
+    expect(results[0].className).toBe("IDamageable");
+    expect(results[0].kind).toBe("interface");
     expect(results[0].isMonoBehaviour).toBe(false);
   });
 
-  it('detects generated code', () => {
+  it("detects generated code", () => {
     const generated = `// <auto-generated>
 // This code was generated by a tool.
 // </auto-generated>

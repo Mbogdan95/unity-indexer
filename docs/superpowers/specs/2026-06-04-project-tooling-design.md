@@ -11,11 +11,13 @@
 **File:** `eslint.config.js`
 
 **Dependencies:**
+
 - `@eslint/js`
 - `typescript-eslint` (v8+)
 - `eslint-config-prettier`
 
 **Configuration:**
+
 - Base: `@eslint/js` recommended + `typescript-eslint` strict-type-checked
 - Key rules enabled: `no-explicit-any`, `strict-boolean-expressions`, `no-floating-promises`, `consistent-type-imports`
 - Prettier integration: `eslint-config-prettier` disables conflicting formatting rules (no `eslint-plugin-prettier`)
@@ -23,6 +25,7 @@
 - Test file overrides: relaxed rules (allow `any` in mocks, relax strict-boolean-expressions)
 
 **Scripts:**
+
 - `npm run lint` — `eslint .`
 - `npm run lint:fix` — `eslint . --fix`
 
@@ -31,9 +34,11 @@
 **Files:** `.prettierrc`, `.prettierignore`
 
 **Dependencies:**
+
 - `prettier`
 
 **Configuration (.prettierrc):**
+
 ```json
 {
   "semi": true,
@@ -45,6 +50,7 @@
 ```
 
 **Ignore (.prettierignore):**
+
 - `dist/`
 - `node_modules/`
 - `*.db`
@@ -52,22 +58,26 @@
 - `grammars/`
 
 **Scripts:**
+
 - `npm run format` — `prettier --write .`
 - `npm run format:check` — `prettier --check .`
 
 ## 3. Pre-commit Hooks (Husky + lint-staged)
 
 **Dependencies:**
+
 - `husky`
 - `lint-staged`
 
 **Hook: pre-commit** — runs `lint-staged`:
+
 - `*.ts` → `eslint --fix` then `prettier --write`
 - `*.json`, `*.md`, `*.yml` → `prettier --write`
 
 **Hook: pre-push** — runs `tsc --noEmit` (full type check before push).
 
 **package.json lint-staged config:**
+
 ```json
 {
   "lint-staged": {
@@ -78,6 +88,7 @@
 ```
 
 **Husky setup:**
+
 - `prepare` script: `husky` (auto-installs hooks on `npm install`)
 
 ## 4. Type Checking
@@ -85,6 +96,7 @@
 No changes to existing `tsconfig.json` — `strict: true` already configured.
 
 **New script:**
+
 - `npm run typecheck` — `tsc --noEmit`
 
 CI runs typecheck as a separate step for clear error attribution.
@@ -98,6 +110,7 @@ CI runs typecheck as a separate step for clear error attribution.
 **Matrix:** Node 18, 20, 22
 
 **Steps:**
+
 1. Checkout
 2. Setup Node (matrix version)
 3. `npm ci`
@@ -114,6 +127,7 @@ Fail-fast enabled — any step failure blocks merge.
 **Triggers:** push to `main`, PRs, weekly schedule (Sunday midnight)
 
 **Steps:**
+
 1. `npm audit --audit-level=high`
 2. CodeQL analysis (JavaScript/TypeScript) — uses `github/codeql-action`
 
@@ -127,6 +141,7 @@ Fail-fast enabled — any step failure blocks merge.
 ### CodeQL
 
 Integrated in security workflow (Section 5). Scans for:
+
 - SQL injection (relevant — project uses better-sqlite3)
 - Path traversal (relevant — project resolves file paths from CLI args)
 - General JavaScript/TypeScript vulnerabilities
@@ -159,6 +174,7 @@ External GitHub App — install separately from GitHub Marketplace. Free for ope
 ```
 
 **New script:**
+
 - `prepublishOnly` — `npm run typecheck && npm run lint && npm run test && npm run build`
 
 **Safety net:** `.npmignore` listing `src/`, `tests/`, `docs/`, `.github/`, `.claude/`, `.superpowers/`, `grammars/`, config files.
@@ -166,6 +182,7 @@ External GitHub App — install separately from GitHub Marketplace. Free for ope
 ## 8. .gitignore Additions
 
 Add to existing `.gitignore`:
+
 ```
 .env*
 *.tsbuildinfo
@@ -193,34 +210,34 @@ Mirrors CI pipeline for local validation.
 
 ## New Dev Dependencies Summary
 
-| Package | Purpose |
-|---------|---------|
-| `@eslint/js` | ESLint base recommended rules |
-| `typescript-eslint` | TypeScript ESLint parser + rules |
+| Package                  | Purpose                                          |
+| ------------------------ | ------------------------------------------------ |
+| `@eslint/js`             | ESLint base recommended rules                    |
+| `typescript-eslint`      | TypeScript ESLint parser + rules                 |
 | `eslint-config-prettier` | Disable ESLint rules that conflict with Prettier |
-| `eslint` | Linter |
-| `prettier` | Formatter |
-| `husky` | Git hooks manager |
-| `lint-staged` | Run linters on staged files |
-| `@vitest/coverage-v8` | Test coverage via V8 |
+| `eslint`                 | Linter                                           |
+| `prettier`               | Formatter                                        |
+| `husky`                  | Git hooks manager                                |
+| `lint-staged`            | Run linters on staged files                      |
+| `@vitest/coverage-v8`    | Test coverage via V8                             |
 
 ## New Files Summary
 
-| File | Purpose |
-|------|---------|
-| `eslint.config.js` | ESLint flat config |
-| `.prettierrc` | Prettier config |
-| `.prettierignore` | Prettier ignore patterns |
-| `.npmignore` | npm publish ignore patterns |
-| `.husky/pre-commit` | Pre-commit hook (lint-staged) |
-| `.husky/pre-push` | Pre-push hook (typecheck) |
-| `.github/workflows/ci.yml` | Main CI pipeline |
-| `.github/workflows/security.yml` | Security scanning pipeline |
-| `.github/dependabot.yml` | Dependabot config |
+| File                             | Purpose                       |
+| -------------------------------- | ----------------------------- |
+| `eslint.config.js`               | ESLint flat config            |
+| `.prettierrc`                    | Prettier config               |
+| `.prettierignore`                | Prettier ignore patterns      |
+| `.npmignore`                     | npm publish ignore patterns   |
+| `.husky/pre-commit`              | Pre-commit hook (lint-staged) |
+| `.husky/pre-push`                | Pre-push hook (typecheck)     |
+| `.github/workflows/ci.yml`       | Main CI pipeline              |
+| `.github/workflows/security.yml` | Security scanning pipeline    |
+| `.github/dependabot.yml`         | Dependabot config             |
 
 ## Modified Files Summary
 
-| File | Changes |
-|------|---------|
+| File           | Changes                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `package.json` | scripts, lint-staged, files, exports, types, license, repository, keywords, new devDependencies, prepare, prepublishOnly |
-| `.gitignore` | Add .env*, *.tsbuildinfo, coverage/, .DS_Store |
+| `.gitignore`   | Add .env*, *.tsbuildinfo, coverage/, .DS_Store                                                                           |

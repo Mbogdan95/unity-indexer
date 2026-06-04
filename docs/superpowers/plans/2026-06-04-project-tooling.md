@@ -13,32 +13,35 @@
 ## File Structure
 
 ### New Files
-| File | Responsibility |
-|------|---------------|
-| `eslint.config.js` | ESLint flat config — rules, ignores, test overrides |
-| `.prettierrc` | Prettier formatting options |
-| `.prettierignore` | Files Prettier should skip |
-| `.npmignore` | Files excluded from npm package |
-| `.husky/pre-commit` | Git hook — runs lint-staged |
-| `.husky/pre-push` | Git hook — runs typecheck |
-| `.github/workflows/ci.yml` | CI pipeline — typecheck, lint, format, test, build |
-| `.github/workflows/security.yml` | Security pipeline — npm audit, CodeQL |
-| `.github/dependabot.yml` | Dependabot config for npm + actions |
+
+| File                             | Responsibility                                      |
+| -------------------------------- | --------------------------------------------------- |
+| `eslint.config.js`               | ESLint flat config — rules, ignores, test overrides |
+| `.prettierrc`                    | Prettier formatting options                         |
+| `.prettierignore`                | Files Prettier should skip                          |
+| `.npmignore`                     | Files excluded from npm package                     |
+| `.husky/pre-commit`              | Git hook — runs lint-staged                         |
+| `.husky/pre-push`                | Git hook — runs typecheck                           |
+| `.github/workflows/ci.yml`       | CI pipeline — typecheck, lint, format, test, build  |
+| `.github/workflows/security.yml` | Security pipeline — npm audit, CodeQL               |
+| `.github/dependabot.yml`         | Dependabot config for npm + actions                 |
 
 ### Modified Files
-| File | Changes |
-|------|---------|
-| `package.json` | devDependencies, scripts, lint-staged, files, exports, types, license, keywords, prepare, prepublishOnly |
-| `.gitignore` | Add .env*, *.tsbuildinfo, coverage/, .DS_Store |
-| `vitest.config.ts` | Add coverage config |
-| `src/**/*.ts` | Prettier formatting + ESLint fixes |
-| `tests/**/*.ts` | Prettier formatting |
+
+| File               | Changes                                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------------------- |
+| `package.json`     | devDependencies, scripts, lint-staged, files, exports, types, license, keywords, prepare, prepublishOnly |
+| `.gitignore`       | Add .env*, *.tsbuildinfo, coverage/, .DS_Store                                                           |
+| `vitest.config.ts` | Add coverage config                                                                                      |
+| `src/**/*.ts`      | Prettier formatting + ESLint fixes                                                                       |
+| `tests/**/*.ts`    | Prettier formatting                                                                                      |
 
 ---
 
 ### Task 1: Install all dev dependencies
 
 **Files:**
+
 - Modify: `package.json`
 
 - [ ] **Step 1: Install linting and formatting dependencies**
@@ -77,6 +80,7 @@ git commit -m "chore: install linting, formatting, hooks, and coverage dev depen
 ### Task 2: Prettier config + format codebase
 
 **Files:**
+
 - Create: `.prettierrc`
 - Create: `.prettierignore`
 - Modify: `src/**/*.ts`, `tests/**/*.ts`, `vitest.config.ts`, `tsconfig.json`
@@ -107,6 +111,7 @@ coverage/
 - [ ] **Step 3: Add format scripts to `package.json`**
 
 Add to `"scripts"`:
+
 ```json
 "format": "prettier --write .",
 "format:check": "prettier --check ."
@@ -136,6 +141,7 @@ git commit -m "style: format codebase with Prettier"
 ### Task 3: ESLint flat config + fix lint errors
 
 **Files:**
+
 - Create: `eslint.config.js`
 - Modify: `src/**/*.ts` (lint fixes)
 
@@ -180,6 +186,7 @@ export default tseslint.config(
 ```
 
 **Note:** `import.meta.dirname` requires Node 20.11+. If Node 18 support is needed, replace with:
+
 ```js
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -189,6 +196,7 @@ import { fileURLToPath } from "node:url";
 - [ ] **Step 2: Add lint scripts to `package.json`**
 
 Add to `"scripts"`:
+
 ```json
 "lint": "eslint .",
 "lint:fix": "eslint . --fix"
@@ -211,6 +219,7 @@ This handles `consistent-type-imports` (adds `type` keyword) and some other auto
 Run: `npx eslint . 2>&1`
 
 Common fixes needed:
+
 - `strict-boolean-expressions`: Change `if (value)` to `if (value !== undefined)` or `if (value != null)` for nullable types. For strings, use `if (value !== "")` or `if (value.length > 0)`.
 - `no-explicit-any`: Replace `any` with `unknown` or proper types. Cast with `as Type` where the type is truly known.
 - `no-unsafe-*` rules: Add type narrowing or proper typing for values coming from `Record<string, unknown>` or parsed YAML.
@@ -247,6 +256,7 @@ git commit -m "fix: resolve all ESLint strict type-checked violations"
 ### Task 4: Update .gitignore and npm package config
 
 **Files:**
+
 - Modify: `.gitignore`
 - Modify: `package.json`
 - Create: `.npmignore`
@@ -254,6 +264,7 @@ git commit -m "fix: resolve all ESLint strict type-checked violations"
 - [ ] **Step 1: Add entries to `.gitignore`**
 
 Append to existing `.gitignore`:
+
 ```
 .env*
 *.tsbuildinfo
@@ -284,6 +295,7 @@ tsconfig.json
 - [ ] **Step 3: Add npm package fields to `package.json`**
 
 Add these top-level fields:
+
 ```json
 {
   "files": ["dist/"],
@@ -300,6 +312,7 @@ Add these top-level fields:
 ```
 
 **Note:** Add `"repository"` field once a GitHub remote is configured. Placeholder:
+
 ```json
 "repository": {
   "type": "git",
@@ -325,12 +338,14 @@ git commit -m "chore: configure npm package fields, .gitignore, and .npmignore"
 ### Task 5: Add remaining package.json scripts
 
 **Files:**
+
 - Modify: `package.json`
 - Modify: `vitest.config.ts`
 
 - [ ] **Step 1: Add coverage config to `vitest.config.ts`**
 
 Replace the full file content with:
+
 ```ts
 import { defineConfig } from "vitest/config";
 
@@ -350,6 +365,7 @@ export default defineConfig({
 - [ ] **Step 2: Add all remaining scripts to `package.json`**
 
 The full `"scripts"` section should be:
+
 ```json
 "scripts": {
   "build": "tsc",
@@ -371,6 +387,7 @@ The full `"scripts"` section should be:
 - [ ] **Step 3: Verify scripts work**
 
 Run each:
+
 ```bash
 npm run typecheck
 npm run lint
@@ -405,6 +422,7 @@ git commit -m "chore: add typecheck, coverage, ci, and prepublishOnly scripts"
 ### Task 6: Husky + lint-staged
 
 **Files:**
+
 - Modify: `package.json`
 - Create: `.husky/pre-commit`
 - Create: `.husky/pre-push`
@@ -418,6 +436,7 @@ This creates `.husky/` directory and a default `pre-commit` hook.
 - [ ] **Step 2: Add lint-staged config to `package.json`**
 
 Add top-level:
+
 ```json
 "lint-staged": {
   "*.ts": ["eslint --fix", "prettier --write"],
@@ -428,6 +447,7 @@ Add top-level:
 - [ ] **Step 3: Write `.husky/pre-commit` hook**
 
 Replace the default content with:
+
 ```bash
 npx lint-staged
 ```
@@ -435,6 +455,7 @@ npx lint-staged
 - [ ] **Step 4: Write `.husky/pre-push` hook**
 
 Create `.husky/pre-push`:
+
 ```bash
 npm run typecheck
 ```
@@ -448,6 +469,7 @@ echo "const   x=1;" >> /tmp/test-lint.ts
 ```
 
 Instead, just verify lint-staged runs:
+
 ```bash
 npx lint-staged --debug 2>&1 | head -5
 ```
@@ -466,6 +488,7 @@ git commit -m "chore: configure Husky pre-commit (lint-staged) and pre-push (typ
 ### Task 7: GitHub Actions CI workflow
 
 **Files:**
+
 - Create: `.github/workflows/ci.yml`
 
 - [ ] **Step 1: Create directory**
@@ -538,6 +561,7 @@ git commit -m "ci: add GitHub Actions CI workflow with Node 18/20/22 matrix"
 ### Task 8: GitHub Actions security workflow + Dependabot
 
 **Files:**
+
 - Create: `.github/workflows/security.yml`
 - Create: `.github/dependabot.yml`
 
@@ -616,6 +640,7 @@ updates:
 Run: `node -e "const fs = require('fs'); const yaml = require('yaml'); ['security.yml', '../dependabot.yml'].forEach(f => { yaml.parse(fs.readFileSync('.github/workflows/../' + (f.startsWith('../') ? f.slice(3) : 'workflows/' + f), 'utf8')); }); console.log('Valid YAML')"`
 
 Or more simply:
+
 ```bash
 node -e "const y=require('yaml'),f=require('fs'); y.parse(f.readFileSync('.github/workflows/security.yml','utf8')); y.parse(f.readFileSync('.github/dependabot.yml','utf8')); console.log('Valid')"
 ```
@@ -660,6 +685,7 @@ Expected: Both files exist and are executable.
 - [ ] **Step 5: Reminder — manual steps**
 
 These require manual action outside this plan:
+
 1. **Socket.dev**: Install the Socket GitHub App from GitHub Marketplace on the repository. Free for open source.
 2. **Repository field**: Once a GitHub remote is configured, update `"repository"` in `package.json` with the actual URL.
 3. **Branch protection**: Enable branch protection on `main` requiring CI checks to pass before merge.

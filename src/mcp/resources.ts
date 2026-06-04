@@ -1,8 +1,8 @@
-import type { Store } from '../db/store.js';
+import type { Store } from "../db/store.js";
 
 export function getProjectSummary(store: Store): object {
   const summary = store.getProjectSummary();
-  if (!summary) return { error: 'No index available. Run indexer first.' };
+  if (!summary) return { error: "No index available. Run indexer first." };
 
   return {
     token_hint: 200,
@@ -27,7 +27,7 @@ export function getProjectFiles(store: Store, cursor?: string): object {
 
   return {
     token_hint: page.length * 3,
-    files: page.map(f => ({
+    files: page.map((f) => ({
       path: f.path,
       type: f.type,
       summary: f.summary_line,

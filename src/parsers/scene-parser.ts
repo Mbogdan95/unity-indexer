@@ -1,7 +1,13 @@
-import { parseUnityYaml, extractReferences } from './unity-yaml.js';
-import { stripDefaults } from './defaults.js';
-import { UNITY_CLASS_IDS } from '../types.js';
-import type { UnityYamlDocument, ParsedScene, ParsedGameObject, ParsedComponent, ParsedGuidReference } from '../types.js';
+import { parseUnityYaml, extractReferences } from "./unity-yaml.js";
+import { stripDefaults } from "./defaults.js";
+import { UNITY_CLASS_IDS } from "../types.js";
+import type {
+  UnityYamlDocument,
+  ParsedScene,
+  ParsedGameObject,
+  ParsedComponent,
+  ParsedGuidReference,
+} from "../types.js";
 
 export function parseScene(content: string): ParsedScene {
   const docs = parseUnityYaml(content);
@@ -16,7 +22,7 @@ export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
   }
 
   // Collect all GameObject docs (classId === 1)
-  const goDocs = docs.filter(d => d.classId === 1);
+  const goDocs = docs.filter((d) => d.classId === 1);
 
   // Build Transform → GameObject mapping
   // Transform docs (classId === 4) have m_GameObject back-ref
@@ -24,12 +30,14 @@ export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
   const goToTransform = new Map<string, string>(); // goFileId → transformFileId
   for (const doc of docs) {
     if (doc.classId === 4) {
-      const data = doc.data[doc.typeName] as Record<string, unknown> | undefined ?? doc.data['Transform'] as Record<string, unknown> | undefined;
+      const data =
+        (doc.data[doc.typeName] as Record<string, unknown> | undefined) ??
+        (doc.data["Transform"] as Record<string, unknown> | undefined);
       if (!data) continue;
-      const goRef = data['m_GameObject'] as Record<string, unknown> | undefined;
+      const goRef = data["m_GameObject"] as Record<string, unknown> | undefined;
       if (goRef) {
-        const goFileId = String(goRef['fileID'] ?? '');
-        if (goFileId && goFileId !== '0') {
+        const goFileId = String(goRef["fileID"] ?? "");
+        if (goFileId && goFileId !== "0") {
           transformToGo.set(doc.fileId, goFileId);
           goToTransform.set(goFileId, doc.fileId);
         }
@@ -43,13 +51,13 @@ export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
     if (doc.classId === 4) {
       const data = getDocData(doc);
       if (!data) continue;
-      const fatherRef = data['m_Father'] as Record<string, unknown> | undefined;
+      const fatherRef = data["m_Father"] as Record<string, unknown> | undefined;
       const ownerGoFileId = transformToGo.get(doc.fileId);
       if (!ownerGoFileId) continue;
 
       if (fatherRef) {
-        const fatherFileId = String(fatherRef['fileID'] ?? '0');
-        if (fatherFileId && fatherFileId !== '0') {
+        const fatherFileId = String(fatherRef["fileID"] ?? "0");
+        if (fatherFileId && fatherFileId !== "0") {
           // fatherFileId is parent Transform's fileId → map to parent GO
           const parentGoFileId = transformToGo.get(fatherFileId) ?? null;
           parentMap.set(ownerGoFileId, parentGoFileId);
@@ -76,23 +84,23 @@ export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
     const data = getDocData(goDoc);
     if (!data) continue;
 
-    const name = String(data['m_Name'] ?? '');
-    const layer = Number(data['m_Layer'] ?? 0);
-    const tag = String(data['m_TagString'] ?? 'Untagged');
-    const active = Number(data['m_IsActive'] ?? 1) !== 0;
+    const name = String(data["m_Name"] ?? "");
+    const layer = Number(data["m_Layer"] ?? 0);
+    const tag = String(data["m_TagString"] ?? "Untagged");
+    const active = Number(data["m_IsActive"] ?? 1) !== 0;
 
     const parentGoFileId = parentMap.get(goDoc.fileId) ?? null;
 
     // Extract component fileIds from m_Component list
-    const componentRefs = data['m_Component'] as Array<Record<string, unknown>> | undefined ?? [];
+    const componentRefs = (data["m_Component"] as Array<Record<string, unknown>> | undefined) ?? [];
     const components: ParsedComponent[] = [];
 
     for (let order = 0; order < componentRefs.length; order++) {
       const compRef = componentRefs[order];
-      const componentEntry = compRef['component'] as Record<string, unknown> | undefined;
+      const componentEntry = compRef["component"] as Record<string, unknown> | undefined;
       if (!componentEntry) continue;
-      const compFileId = String(componentEntry['fileID'] ?? '');
-      if (!compFileId || compFileId === '0') continue;
+      const compFileId = String(componentEntry["fileID"] ?? "");
+      if (!compFileId || compFileId === "0") continue;
 
       const compDoc = docByFileId.get(compFileId);
       if (!compDoc) continue;
@@ -105,17 +113,17 @@ export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
       // Extract script GUID for MonoBehaviour
       let scriptGuid: string | null = null;
       if (compDoc.classId === 114) {
-        const scriptRef = compData['m_Script'] as Record<string, unknown> | undefined;
-        if (scriptRef && scriptRef['guid']) {
-          scriptGuid = String(scriptRef['guid']);
+        const scriptRef = compData["m_Script"] as Record<string, unknown> | undefined;
+        if (scriptRef && scriptRef["guid"]) {
+          scriptGuid = String(scriptRef["guid"]);
         }
       }
 
       // Strip defaults and remove infrastructure fields
       const stripped = stripDefaults(typeName, compData);
-      delete stripped['m_GameObject'];
+      delete stripped["m_GameObject"];
       if (compDoc.classId === 114) {
-        delete stripped['m_Script'];
+        delete stripped["m_Script"];
       }
 
       components.push({

@@ -1,13 +1,13 @@
-import { readFileSync, statSync, readdirSync } from 'fs';
-import { join, relative, basename } from 'path';
-import { createHash } from 'crypto';
-import { Store } from '../db/store.js';
-import { parseScene } from '../parsers/scene-parser.js';
-import { parsePrefab } from '../parsers/prefab-parser.js';
-import { parseAsset } from '../parsers/asset-parser.js';
-import { parseScript } from '../parsers/script-parser.js';
-import { parseMeta } from '../parsers/meta-parser.js';
-import { parseAsmDef } from '../parsers/asmdef-parser.js';
+import { readFileSync, statSync, readdirSync } from "fs";
+import { join, relative, basename } from "path";
+import { createHash } from "crypto";
+import { Store } from "../db/store.js";
+import { parseScene } from "../parsers/scene-parser.js";
+import { parsePrefab } from "../parsers/prefab-parser.js";
+import { parseAsset } from "../parsers/asset-parser.js";
+import { parseScript } from "../parsers/script-parser.js";
+import { parseMeta } from "../parsers/meta-parser.js";
+import { parseAsmDef } from "../parsers/asmdef-parser.js";
 import {
   generateComponentSummary,
   generateSubtreeSummary,
@@ -17,14 +17,9 @@ import {
   generateFileSummaryLine,
   computeGameObjectImportance,
   computeFileImportance,
-} from '../db/summaries.js';
-import { detectFileType } from '../types.js';
-import type {
-  FileRow,
-  UnityFileType,
-  ParsedGameObject,
-  ParsedGuidReference,
-} from '../types.js';
+} from "../db/summaries.js";
+import { detectFileType } from "../types.js";
+import type { FileRow, UnityFileType, ParsedGameObject, ParsedGuidReference } from "../types.js";
 
 function log(msg: string): void {
   console.error(`[unity-indexer] ${msg}`);
@@ -46,32 +41,46 @@ export class Indexer {
     const files = this.collectFiles();
     log(`found ${files.length} files to index`);
 
-    const metaFiles = files.filter(f => f.endsWith('.meta'));
-    const otherFiles = files.filter(f => !f.endsWith('.meta'));
+    const metaFiles = files.filter((f) => f.endsWith(".meta"));
+    const otherFiles = files.filter((f) => !f.endsWith(".meta"));
 
     // Index meta files first in batches (GUID registry needed by other parsers)
     log(`indexing ${metaFiles.length} meta files...`);
     this.indexBatch(metaFiles);
 
     // Index scripts before scenes/prefabs so guidToClassMap is populated
-    const scripts = otherFiles.filter(f => f.endsWith('.cs'));
-    const asmdefs = otherFiles.filter(f => f.endsWith('.asmdef'));
-    const assets = otherFiles.filter(f => f.endsWith('.asset'));
-    const scenesAndPrefabs = otherFiles.filter(f => f.endsWith('.unity') || f.endsWith('.prefab'));
+    const scripts = otherFiles.filter((f) => f.endsWith(".cs"));
+    const asmdefs = otherFiles.filter((f) => f.endsWith(".asmdef"));
+    const assets = otherFiles.filter((f) => f.endsWith(".asset"));
+    const scenesAndPrefabs = otherFiles.filter(
+      (f) => f.endsWith(".unity") || f.endsWith(".prefab"),
+    );
 
-    if (scripts.length) { log(`indexing ${scripts.length} script files...`); this.indexBatch(scripts); }
-    if (asmdefs.length) { log(`indexing ${asmdefs.length} asmdef files...`); this.indexBatch(asmdefs); }
-    if (assets.length) { log(`indexing ${assets.length} asset files...`); this.indexBatch(assets); }
+    if (scripts.length) {
+      log(`indexing ${scripts.length} script files...`);
+      this.indexBatch(scripts);
+    }
+    if (asmdefs.length) {
+      log(`indexing ${asmdefs.length} asmdef files...`);
+      this.indexBatch(asmdefs);
+    }
+    if (assets.length) {
+      log(`indexing ${assets.length} asset files...`);
+      this.indexBatch(assets);
+    }
 
     // Build guid→class map once now that all scripts + metas are indexed
-    log('building GUID → class map...');
+    log("building GUID → class map...");
     this.guidToClassCache = this.buildGuidToClassMap();
 
-    if (scenesAndPrefabs.length) { log(`indexing ${scenesAndPrefabs.length} scene/prefab files...`); this.indexBatch(scenesAndPrefabs); }
+    if (scenesAndPrefabs.length) {
+      log(`indexing ${scenesAndPrefabs.length} scene/prefab files...`);
+      this.indexBatch(scenesAndPrefabs);
+    }
 
     this.guidToClassCache = null;
 
-    log('recomputing reference counts...');
+    log("recomputing reference counts...");
     this.store.recomputeReferenceCounts();
     this.updateProjectSummary();
   }
@@ -106,7 +115,7 @@ export class Indexer {
       this.store.insertChangeLog({
         file_id: existing.id,
         changed_at: new Date().toISOString(),
-        change_type: 'deleted',
+        change_type: "deleted",
       });
       this.store.deleteFileData(existing.id);
       this.store.deleteFile(existing.id);
@@ -126,7 +135,7 @@ export class Indexer {
     // Read file content
     let content: string;
     try {
-      content = readFileSync(fullPath, 'utf8');
+      content = readFileSync(fullPath, "utf8");
     } catch {
       // File doesn't exist or unreadable — skip
       return;
@@ -137,24 +146,24 @@ export class Indexer {
 
     // Binary check: Unity YAML files must start with '%YAML'
     if (
-      (fileType === 'scene' || fileType === 'prefab' || fileType === 'asset') &&
-      !content.trimStart().startsWith('%YAML')
+      (fileType === "scene" || fileType === "prefab" || fileType === "asset") &&
+      !content.trimStart().startsWith("%YAML")
     ) {
       this.store.upsertFile({
         path: relativePath,
         type: fileType,
-        content_hash: '',
+        content_hash: "",
         modified_at: this.getModifiedTime(fullPath),
         indexed_at: new Date().toISOString(),
         summary_line: basename(relativePath),
         importance_score: 0,
-        status: 'binary',
+        status: "binary",
       });
       return;
     }
 
     // Compute content hash
-    const contentHash = createHash('sha256').update(content).digest('hex');
+    const contentHash = createHash("sha256").update(content).digest("hex");
 
     // Check if file changed
     const existing = this.store.getFileByPath(relativePath);
@@ -165,7 +174,7 @@ export class Indexer {
 
     // Upsert the file row (initially with minimal data)
     const modifiedAt = this.getModifiedTime(fullPath);
-    const changeType = existing ? 'modified' : 'added';
+    const changeType = existing ? "modified" : "added";
 
     const fileId = this.store.upsertFile({
       path: relativePath,
@@ -175,7 +184,7 @@ export class Indexer {
       indexed_at: new Date().toISOString(),
       summary_line: basename(relativePath),
       importance_score: 0,
-      status: 'ok',
+      status: "ok",
     });
 
     // Clear old data if re-indexing
@@ -186,22 +195,22 @@ export class Indexer {
     // Dispatch to type-specific indexer
     try {
       switch (fileType) {
-        case 'meta':
+        case "meta":
           this.indexMeta(fileId, content);
           break;
-        case 'scene':
+        case "scene":
           this.indexScene(fileId, relativePath, content);
           break;
-        case 'prefab':
+        case "prefab":
           this.indexPrefab(fileId, relativePath, content);
           break;
-        case 'asset':
+        case "asset":
           this.indexAssetFile(fileId, relativePath, content);
           break;
-        case 'script':
+        case "script":
           this.indexScript(fileId, relativePath, content);
           break;
-        case 'asmdef':
+        case "asmdef":
           this.indexAsmDef(fileId, relativePath, content);
           break;
       }
@@ -222,7 +231,7 @@ export class Indexer {
         indexed_at: new Date().toISOString(),
         summary_line: basename(relativePath),
         importance_score: 0,
-        status: 'partial',
+        status: "partial",
       });
     }
   }
@@ -249,10 +258,10 @@ export class Indexer {
 
     const fileName = basename(relativePath);
     const scriptCount = parsed.gameObjects.reduce(
-      (sum, go) => sum + go.components.filter(c => c.typeName === 'MonoBehaviour').length,
+      (sum, go) => sum + go.components.filter((c) => c.typeName === "MonoBehaviour").length,
       0,
     );
-    const summaryLine = generateFileSummaryLine('scene', fileName, {
+    const summaryLine = generateFileSummaryLine("scene", fileName, {
       gameObjectCount: parsed.gameObjects.length,
       scriptCount,
     });
@@ -265,15 +274,13 @@ export class Indexer {
 
     this.store.upsertFile({
       path: relativePath,
-      type: 'scene',
-      content_hash: createHash('sha256')
-        .update(content)
-        .digest('hex'),
+      type: "scene",
+      content_hash: createHash("sha256").update(content).digest("hex"),
       modified_at: this.getModifiedTime(join(this.projectRoot, relativePath)),
       indexed_at: new Date().toISOString(),
       summary_line: summaryLine,
       importance_score: importance,
-      status: 'ok',
+      status: "ok",
     });
   }
 
@@ -285,12 +292,12 @@ export class Indexer {
     this.storeReferences(fileId, parsed.references);
 
     const fileName = basename(relativePath);
-    const summaryLine = generateFileSummaryLine('prefab', fileName, {
+    const summaryLine = generateFileSummaryLine("prefab", fileName, {
       isVariant: parsed.isVariant,
       gameObjectCount: parsed.gameObjects.length,
     });
-    const hasCustomScripts = parsed.gameObjects.some(go =>
-      go.components.some(c => c.typeName === 'MonoBehaviour'),
+    const hasCustomScripts = parsed.gameObjects.some((go) =>
+      go.components.some((c) => c.typeName === "MonoBehaviour"),
     );
     const importance = computeFileImportance({
       incomingRefCount: 0,
@@ -301,13 +308,13 @@ export class Indexer {
 
     this.store.upsertFile({
       path: relativePath,
-      type: 'prefab',
-      content_hash: createHash('sha256').update(content).digest('hex'),
+      type: "prefab",
+      content_hash: createHash("sha256").update(content).digest("hex"),
       modified_at: this.getModifiedTime(join(this.projectRoot, relativePath)),
       indexed_at: new Date().toISOString(),
       summary_line: summaryLine,
       importance_score: importance,
-      status: 'ok',
+      status: "ok",
     });
   }
 
@@ -316,19 +323,19 @@ export class Indexer {
     this.storeReferences(fileId, parsed.references);
 
     const fileName = basename(relativePath);
-    const summaryLine = generateFileSummaryLine('asset', fileName, {
+    const summaryLine = generateFileSummaryLine("asset", fileName, {
       typeName: parsed.typeName,
     });
 
     this.store.upsertFile({
       path: relativePath,
-      type: 'asset',
-      content_hash: createHash('sha256').update(content).digest('hex'),
+      type: "asset",
+      content_hash: createHash("sha256").update(content).digest("hex"),
       modified_at: this.getModifiedTime(join(this.projectRoot, relativePath)),
       indexed_at: new Date().toISOString(),
       summary_line: summaryLine,
       importance_score: 0,
-      status: 'ok',
+      status: "ok",
     });
   }
 
@@ -336,9 +343,9 @@ export class Indexer {
     const scripts = parseScript(content);
     const fileName = basename(relativePath);
 
-    let primarySummaryLine = generateFileSummaryLine('script', fileName, {
-      className: '',
-      baseClass: '',
+    let primarySummaryLine = generateFileSummaryLine("script", fileName, {
+      className: "",
+      baseClass: "",
       memberCount: 0,
     });
     let primaryImportance = 0;
@@ -351,7 +358,7 @@ export class Indexer {
         namespace: script.namespace,
         base_class: script.baseClass,
         interfaces: JSON.stringify(script.interfaces),
-        assembly_name: '',
+        assembly_name: "",
         api_summary: apiSummary,
         complexity_score: script.members.length,
         is_monobehaviour: script.isMonoBehaviour,
@@ -371,14 +378,14 @@ export class Indexer {
           parameters: JSON.stringify(member.parameters),
           attributes: JSON.stringify(member.attributes),
           signature,
-          has_serialize_field: member.attributes.includes('SerializeField'),
-          has_header_attr: member.attributes.includes('Header'),
+          has_serialize_field: member.attributes.includes("SerializeField"),
+          has_header_attr: member.attributes.includes("Header"),
         });
       }
 
       // Use the first (or most important) script for the file summary
       if (script === scripts[0]) {
-        primarySummaryLine = generateFileSummaryLine('script', fileName, {
+        primarySummaryLine = generateFileSummaryLine("script", fileName, {
           className: script.className,
           baseClass: script.baseClass,
           memberCount: script.members.length,
@@ -394,22 +401,21 @@ export class Indexer {
 
     this.store.upsertFile({
       path: relativePath,
-      type: 'script',
-      content_hash: createHash('sha256').update(content).digest('hex'),
+      type: "script",
+      content_hash: createHash("sha256").update(content).digest("hex"),
       modified_at: this.getModifiedTime(join(this.projectRoot, relativePath)),
       indexed_at: new Date().toISOString(),
       summary_line: primarySummaryLine,
       importance_score: primaryImportance,
-      status: 'ok',
+      status: "ok",
     });
   }
 
   private indexAsmDef(fileId: number, relativePath: string, content: string): void {
     const parsed = parseAsmDef(content);
 
-    const depSummary = parsed.references.length > 0
-      ? `refs: ${parsed.references.join(', ')}`
-      : 'no references';
+    const depSummary =
+      parsed.references.length > 0 ? `refs: ${parsed.references.join(", ")}` : "no references";
 
     this.store.insertAssembly({
       file_id: fileId,
@@ -421,19 +427,19 @@ export class Indexer {
     });
 
     const fileName = basename(relativePath);
-    const summaryLine = generateFileSummaryLine('asmdef', fileName, {
+    const summaryLine = generateFileSummaryLine("asmdef", fileName, {
       assemblyName: parsed.name,
     });
 
     this.store.upsertFile({
       path: relativePath,
-      type: 'asmdef',
-      content_hash: createHash('sha256').update(content).digest('hex'),
+      type: "asmdef",
+      content_hash: createHash("sha256").update(content).digest("hex"),
       modified_at: this.getModifiedTime(join(this.projectRoot, relativePath)),
       indexed_at: new Date().toISOString(),
       summary_line: summaryLine,
       importance_score: 0,
-      status: 'ok',
+      status: "ok",
     });
   }
 
@@ -483,9 +489,7 @@ export class Indexer {
         subtreeDepthMap.set(fileIdLocal, 0);
         return 0;
       }
-      const maxChildDepth = Math.max(
-        ...children.map(c => computeSubtreeDepth(c.fileIdLocal)),
-      );
+      const maxChildDepth = Math.max(...children.map((c) => computeSubtreeDepth(c.fileIdLocal)));
       const depth = maxChildDepth + 1;
       subtreeDepthMap.set(fileIdLocal, depth);
       return depth;
@@ -502,18 +506,18 @@ export class Indexer {
 
     const insertGo = (go: ParsedGameObject) => {
       const depth = depthMap.get(go.fileIdLocal) ?? 0;
-      const parentKey = go.parentFileIdLocal ?? '__root__';
+      const parentKey = go.parentFileIdLocal ?? "__root__";
       const idx = siblingIndex.get(parentKey) ?? 0;
       siblingIndex.set(parentKey, idx + 1);
 
       const children = childMap.get(go.fileIdLocal) ?? [];
-      const childNames = children.map(c => c.name);
+      const childNames = children.map((c) => c.name);
       const subtreeDepth = subtreeDepthMap.get(go.fileIdLocal) ?? 0;
       const isLeaf = children.length === 0;
 
       const componentSummary = generateComponentSummary(go.components, guidToClass);
       const subtreeSummary = generateSubtreeSummary(go.name, childNames);
-      const hasMonoBehaviour = go.components.some(c => c.typeName === 'MonoBehaviour');
+      const hasMonoBehaviour = go.components.some((c) => c.typeName === "MonoBehaviour");
 
       const importance = computeGameObjectImportance({
         hasMonoBehaviour,
@@ -543,9 +547,9 @@ export class Indexer {
       // Insert components
       for (const comp of go.components) {
         const fieldSummary = generateFieldSummary(comp.serializedFields, guidToClass);
-        const patternHash = createHash('md5')
+        const patternHash = createHash("md5")
           .update(comp.typeName + JSON.stringify(Object.keys(comp.serializedFields).sort()))
-          .digest('hex');
+          .digest("hex");
 
         this.store.insertComponent({
           game_object_id: goId,
@@ -599,7 +603,7 @@ export class Indexer {
       if (!fileRow) continue;
 
       // Find the .meta file for this script file
-      const metaPath = fileRow.path + '.meta';
+      const metaPath = fileRow.path + ".meta";
       const metaFile = this.store.getFileByPath(metaPath);
       if (!metaFile) continue;
 
@@ -620,14 +624,14 @@ export class Indexer {
       fileCounts[f.type] = (fileCounts[f.type] ?? 0) + 1;
     }
 
-    const sceneCount = fileCounts['scene'] ?? 0;
-    const prefabCount = fileCounts['prefab'] ?? 0;
-    const scriptCount = fileCounts['script'] ?? 0;
+    const sceneCount = fileCounts["scene"] ?? 0;
+    const prefabCount = fileCounts["prefab"] ?? 0;
+    const scriptCount = fileCounts["script"] ?? 0;
 
     const description =
-      `Unity project with ${sceneCount} scene${sceneCount !== 1 ? 's' : ''}, ` +
-      `${prefabCount} prefab${prefabCount !== 1 ? 's' : ''}, ` +
-      `and ${scriptCount} script${scriptCount !== 1 ? 's' : ''}.`;
+      `Unity project with ${sceneCount} scene${sceneCount !== 1 ? "s" : ""}, ` +
+      `${prefabCount} prefab${prefabCount !== 1 ? "s" : ""}, ` +
+      `and ${scriptCount} script${scriptCount !== 1 ? "s" : ""}.`;
 
     // Hot scripts: most-referenced script files
     const topRefs = this.store.getTopReferencedFiles(10);
@@ -635,11 +639,11 @@ export class Indexer {
     for (const ref of topRefs) {
       if (ref.incoming_count === 0) continue;
       const file = this.store.getFileById(ref.file_id);
-      if (file?.type === 'meta') {
-        const assetPath = file.path.endsWith('.meta') ? file.path.slice(0, -5) : file.path;
+      if (file?.type === "meta") {
+        const assetPath = file.path.endsWith(".meta") ? file.path.slice(0, -5) : file.path;
         const assetFile = this.store.getFileByPath(assetPath);
-        if (assetFile?.type === 'script') {
-          const script = this.store.listScripts().find(s => s.file_id === assetFile.id);
+        if (assetFile?.type === "script") {
+          const script = this.store.listScripts().find((s) => s.file_id === assetFile.id);
           if (script) hotScripts.push(script.class_name);
         }
       }
@@ -666,8 +670,8 @@ export class Indexer {
 
   private collectFiles(): string[] {
     const files: string[] = [];
-    const assetsDir = join(this.projectRoot, 'Assets');
-    const packagesDir = join(this.projectRoot, 'Packages');
+    const assetsDir = join(this.projectRoot, "Assets");
+    const packagesDir = join(this.projectRoot, "Packages");
 
     try {
       this.walkDir(assetsDir, files);

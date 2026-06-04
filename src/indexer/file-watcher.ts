@@ -1,12 +1,12 @@
-import { watch, type FSWatcher } from 'chokidar';
-import { relative } from 'path';
-import { existsSync } from 'fs';
-import { Indexer } from './indexer.js';
-import { detectFileType } from '../types.js';
+import { watch, type FSWatcher } from "chokidar";
+import { relative } from "path";
+import { existsSync } from "fs";
+import { Indexer } from "./indexer.js";
+import { detectFileType } from "../types.js";
 
 export class FileWatcher {
   private watcher: FSWatcher | null = null;
-  private pendingChanges = new Map<string, 'add' | 'change' | 'unlink'>();
+  private pendingChanges = new Map<string, "add" | "change" | "unlink">();
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private bulkTimer: ReturnType<typeof setTimeout> | null = null;
   private bulkCount = 0;
@@ -30,18 +30,13 @@ export class FileWatcher {
       usePolling: true,
       interval: 2000,
       binaryInterval: 5000,
-      ignored: [
-        '**/Library/**',
-        '**/Temp/**',
-        '**/obj/**',
-        '**/*.tmp',
-      ],
+      ignored: ["**/Library/**", "**/Temp/**", "**/obj/**", "**/*.tmp"],
     });
 
-    this.watcher.on('add', path => this.onFileEvent(path, 'add'));
-    this.watcher.on('change', path => this.onFileEvent(path, 'change'));
-    this.watcher.on('unlink', path => this.onFileEvent(path, 'unlink'));
-    this.watcher.on('error', (err: unknown) => {
+    this.watcher.on("add", (path) => this.onFileEvent(path, "add"));
+    this.watcher.on("change", (path) => this.onFileEvent(path, "change"));
+    this.watcher.on("unlink", (path) => this.onFileEvent(path, "unlink"));
+    this.watcher.on("error", (err: unknown) => {
       console.error(`[unity-indexer] watcher error: ${err}`);
     });
   }
@@ -53,7 +48,7 @@ export class FileWatcher {
     this.watcher = null;
   }
 
-  private onFileEvent(fullPath: string, event: 'add' | 'change' | 'unlink'): void {
+  private onFileEvent(fullPath: string, event: "add" | "change" | "unlink"): void {
     const rel = relative(this.projectRoot, fullPath);
     if (!detectFileType(rel)) return;
 
@@ -79,7 +74,7 @@ export class FileWatcher {
     this.pendingChanges.clear();
 
     for (const [relativePath, event] of changes) {
-      if (event === 'unlink') {
+      if (event === "unlink") {
         this.indexer.removeFile(relativePath);
       } else {
         this.indexer.indexFile(relativePath);

@@ -1,6 +1,6 @@
-import { parseUnityYaml, extractReferences } from './unity-yaml.js';
-import { buildScene } from './scene-parser.js';
-import type { ParsedPrefab } from '../types.js';
+import { parseUnityYaml, extractReferences } from "./unity-yaml.js";
+import { buildScene } from "./scene-parser.js";
+import type { ParsedPrefab } from "../types.js";
 
 export function parsePrefab(content: string): ParsedPrefab {
   const docs = parseUnityYaml(content);
@@ -14,10 +14,10 @@ export function parsePrefab(content: string): ParsedPrefab {
       const typeName = Object.keys(doc.data)[0];
       if (!typeName) continue;
       const data = doc.data[typeName] as Record<string, unknown>;
-      const sourcePrefab = data['m_SourcePrefab'] as Record<string, unknown> | undefined;
-      if (sourcePrefab && sourcePrefab['guid']) {
+      const sourcePrefab = data["m_SourcePrefab"] as Record<string, unknown> | undefined;
+      if (sourcePrefab && sourcePrefab["guid"]) {
         isVariant = true;
-        sourcePrefabGuid = String(sourcePrefab['guid']);
+        sourcePrefabGuid = String(sourcePrefab["guid"]);
       }
     }
   }
@@ -25,7 +25,9 @@ export function parsePrefab(content: string): ParsedPrefab {
   for (const doc of docs) {
     if (doc.classId === 1001 || doc.classId === 1101) {
       const refs = extractReferences(doc.data, `PrefabInstance:${doc.fileId}`);
-      for (const ref of refs) { ref.refType = 'prefab_variant'; }
+      for (const ref of refs) {
+        ref.refType = "prefab_variant";
+      }
       scene.references.push(...refs);
     }
   }

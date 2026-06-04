@@ -1,4 +1,4 @@
-import type { ParsedComponent, ParsedScript, ParsedScriptMember } from '../types.js';
+import type { ParsedComponent, ParsedScript, ParsedScriptMember } from "../types.js";
 
 const MAX_SHOWN = 5;
 
@@ -16,12 +16,12 @@ export function generateComponentSummary(
 ): string {
   return components
     .map((c) => {
-      if (c.typeName === 'MonoBehaviour' && c.scriptGuid) {
-        return guidToClassName.get(c.scriptGuid) ?? 'MonoBehaviour';
+      if (c.typeName === "MonoBehaviour" && c.scriptGuid) {
+        return guidToClassName.get(c.scriptGuid) ?? "MonoBehaviour";
       }
       return c.typeName;
     })
-    .join(', ');
+    .join(", ");
 }
 
 // ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ export function generateSubtreeSummary(name: string, childNames: string[]): stri
   const shown = childNames.slice(0, MAX_SHOWN);
   const rest = childNames.length - shown.length;
 
-  let childList = shown.join(', ');
+  let childList = shown.join(", ");
   if (rest > 0) childList += `, ...+${rest} more`;
 
   return `${name} [${childNames.length} children: ${childList}]`;
@@ -59,9 +59,9 @@ export function generateFieldSummary(
   const parts: string[] = [];
 
   for (const [key, value] of Object.entries(fields)) {
-    if (value !== null && typeof value === 'object') {
+    if (value !== null && typeof value === "object") {
       const obj = value as Record<string, unknown>;
-      if ('guid' in obj && typeof obj.guid === 'string') {
+      if ("guid" in obj && typeof obj.guid === "string") {
         const guid = obj.guid;
         const resolved = guidNames?.get(guid) ?? guid.slice(0, 8);
         parts.push(`${key}=ref:${resolved}`);
@@ -73,7 +73,7 @@ export function generateFieldSummary(
     }
   }
 
-  return parts.join(', ');
+  return parts.join(", ");
 }
 
 // ---------------------------------------------------------------------------
@@ -93,51 +93,48 @@ export function generateApiSummary(script: ParsedScript): string {
   if (script.baseClass) bases.push(script.baseClass);
   bases.push(...script.interfaces);
 
-  const header = bases.length > 0
-    ? `${script.className} : ${bases.join(', ')}`
-    : script.className;
+  const header = bases.length > 0 ? `${script.className} : ${bases.join(", ")}` : script.className;
   lines.push(header);
 
   // Group members by kind
   const fields = script.members.filter(
-    (m) => m.kind === 'field' && (m.attributes.includes('SerializeField') || m.access === 'public'),
+    (m) => m.kind === "field" && (m.attributes.includes("SerializeField") || m.access === "public"),
   );
-  const properties = script.members.filter((m) => m.kind === 'property');
+  const properties = script.members.filter((m) => m.kind === "property");
   // Prefer public methods, but show all if none are public
-  const allMethods = script.members.filter((m) => m.kind === 'method' || m.kind === 'constructor');
-  const publicMethods = allMethods.filter((m) => m.access === 'public');
+  const allMethods = script.members.filter((m) => m.kind === "method" || m.kind === "constructor");
+  const publicMethods = allMethods.filter((m) => m.access === "public");
   const methods = publicMethods.length > 0 ? publicMethods : allMethods;
-  const events = script.members.filter((m) => m.kind === 'event');
+  const events = script.members.filter((m) => m.kind === "event");
 
   if (fields.length > 0) {
     const fieldParts = fields.map((f) => {
-      const attrs = f.attributes.length > 0
-        ? f.attributes.map((a) => `[${a}]`).join(' ') + ' '
-        : '';
-      return `${f.name}(${f.returnType})${attrs ? ' ' + attrs.trimEnd() : ''}`;
+      const attrs =
+        f.attributes.length > 0 ? f.attributes.map((a) => `[${a}]`).join(" ") + " " : "";
+      return `${f.name}(${f.returnType})${attrs ? " " + attrs.trimEnd() : ""}`;
     });
-    lines.push(`  fields: ${fieldParts.join(', ')}`);
+    lines.push(`  fields: ${fieldParts.join(", ")}`);
   }
 
   if (properties.length > 0) {
     const propParts = properties.map((p) => `${p.name}(${p.returnType}) {get}`);
-    lines.push(`  properties: ${propParts.join(', ')}`);
+    lines.push(`  properties: ${propParts.join(", ")}`);
   }
 
   if (methods.length > 0) {
     const methodParts = methods.map((m) => {
-      const paramTypes = m.parameters.map((p) => p.type).join(', ');
+      const paramTypes = m.parameters.map((p) => p.type).join(", ");
       return `${m.name}(${paramTypes})`;
     });
-    lines.push(`  methods: ${methodParts.join(', ')}`);
+    lines.push(`  methods: ${methodParts.join(", ")}`);
   }
 
   if (events.length > 0) {
     const eventParts = events.map((e) => `${e.name}(${e.returnType})`);
-    lines.push(`  events: ${eventParts.join(', ')}`);
+    lines.push(`  events: ${eventParts.join(", ")}`);
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -148,37 +145,32 @@ export function generateApiSummary(script: ParsedScript): string {
  * Generates a full C#-style member signature string.
  */
 export function generateMemberSignature(member: ParsedScriptMember): string {
-  const attrPrefix = member.attributes.length > 0
-    ? member.attributes.map((a) => `[${a}]`).join(' ') + ' '
-    : '';
-  const staticPart = member.isStatic ? 'static ' : '';
+  const attrPrefix =
+    member.attributes.length > 0 ? member.attributes.map((a) => `[${a}]`).join(" ") + " " : "";
+  const staticPart = member.isStatic ? "static " : "";
 
   let sig: string;
 
   switch (member.kind) {
-    case 'constructor': {
-      const params = member.parameters
-        .map((p) => `${p.type} ${p.name}`)
-        .join(', ');
+    case "constructor": {
+      const params = member.parameters.map((p) => `${p.type} ${p.name}`).join(", ");
       sig = `${attrPrefix}${member.access} ${staticPart}${member.name}(${params})`;
       break;
     }
-    case 'method': {
-      const params = member.parameters
-        .map((p) => `${p.type} ${p.name}`)
-        .join(', ');
+    case "method": {
+      const params = member.parameters.map((p) => `${p.type} ${p.name}`).join(", ");
       sig = `${attrPrefix}${member.access} ${staticPart}${member.returnType} ${member.name}(${params})`;
       break;
     }
-    case 'field': {
+    case "field": {
       sig = `${attrPrefix}${member.access} ${staticPart}${member.returnType} ${member.name}`;
       break;
     }
-    case 'property': {
+    case "property": {
       sig = `${attrPrefix}${member.access} ${staticPart}${member.returnType} ${member.name} { get; }`;
       break;
     }
-    case 'event': {
+    case "event": {
       sig = `${attrPrefix}${member.access} ${staticPart}event ${member.returnType} ${member.name}`;
       break;
     }
@@ -203,31 +195,29 @@ export function generateFileSummaryLine(
   stats: Record<string, unknown>,
 ): string {
   switch (type) {
-    case 'scene': {
+    case "scene": {
       const goCount = stats.gameObjectCount ?? 0;
       const scriptCount = stats.scriptCount ?? 0;
       return `${fileName} — ${goCount} GameObjects, ${scriptCount} scripts`;
     }
-    case 'prefab': {
-      const variant = stats.isVariant ? 'prefab variant' : 'prefab';
+    case "prefab": {
+      const variant = stats.isVariant ? "prefab variant" : "prefab";
       const goCount = stats.gameObjectCount ?? 0;
       return `${fileName} — ${variant}, ${goCount} GameObjects`;
     }
-    case 'script': {
-      const className = stats.className ?? '';
-      const baseClass = stats.baseClass ?? '';
+    case "script": {
+      const className = stats.className ?? "";
+      const baseClass = stats.baseClass ?? "";
       const memberCount = stats.memberCount ?? 0;
-      const classHeader = baseClass
-        ? `${className} : ${baseClass}`
-        : String(className);
+      const classHeader = baseClass ? `${className} : ${baseClass}` : String(className);
       return `${fileName} — ${classHeader}, ${memberCount} members`;
     }
-    case 'asset': {
-      const typeName = stats.typeName ?? '';
+    case "asset": {
+      const typeName = stats.typeName ?? "";
       return `${fileName} — ${typeName}`;
     }
-    case 'asmdef': {
-      const assemblyName = stats.assemblyName ?? '';
+    case "asmdef": {
+      const assemblyName = stats.assemblyName ?? "";
       return `${fileName} — assembly: ${assemblyName}`;
     }
     default:

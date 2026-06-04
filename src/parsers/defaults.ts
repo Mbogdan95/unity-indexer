@@ -46,8 +46,8 @@ export const COMPONENT_DEFAULTS: Record<string, Record<string, unknown>> = {
     m_PrefabAsset: { fileID: 0 },
     m_Enabled: 1,
     m_EditorHideFlags: 0,
-    m_Name: '',
-    m_EditorClassIdentifier: '',
+    m_Name: "",
+    m_EditorClassIdentifier: "",
   },
   Camera: {
     m_ObjectHideFlags: 0,
@@ -59,17 +59,17 @@ export const COMPONENT_DEFAULTS: Record<string, Record<string, unknown>> = {
 };
 
 const ALWAYS_DEFAULT_FIELDS = new Set([
-  'm_ObjectHideFlags',
-  'm_CorrespondingSourceObject',
-  'm_PrefabInstance',
-  'm_PrefabAsset',
-  'm_EditorHideFlags',
-  'm_EditorClassIdentifier',
+  "m_ObjectHideFlags",
+  "m_CorrespondingSourceObject",
+  "m_PrefabInstance",
+  "m_PrefabAsset",
+  "m_EditorHideFlags",
+  "m_EditorClassIdentifier",
 ]);
 
 export function stripDefaults(
   typeName: string,
-  fields: Record<string, unknown>
+  fields: Record<string, unknown>,
 ): Record<string, unknown> {
   const defaults = COMPONENT_DEFAULTS[typeName] ?? {};
   const result: Record<string, unknown> = {};
@@ -88,13 +88,13 @@ function deepEqual(a: unknown, b: unknown): boolean {
   if (a === null || b === null) return false;
   if (typeof a !== typeof b) return false;
 
-  if (typeof a === 'object') {
+  if (typeof a === "object") {
     const aObj = a as Record<string, unknown>;
     const bObj = b as Record<string, unknown>;
     const aKeys = Object.keys(aObj);
     const bKeys = Object.keys(bObj);
     if (aKeys.length !== bKeys.length) return false;
-    return aKeys.every(key => deepEqual(aObj[key], bObj[key]));
+    return aKeys.every((key) => deepEqual(aObj[key], bObj[key]));
   }
 
   return false;
