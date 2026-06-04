@@ -405,7 +405,25 @@ export function handleFindComponents(
     fileId = file.id;
   }
 
-  const components = store.getComponentsByType(params.type, fileId);
+  // Try exact type_name match first (built-in components like Transform, Rigidbody)
+  let components = store.getComponentsByType(params.type, fileId);
+
+  // If no results, try resolving as a script class name → GUID → script_guid match
+  if (components.length === 0) {
+    const script = store.getScriptByClassName(params.type);
+    if (script) {
+      const scriptFile = store.getFileById(script.file_id);
+      if (scriptFile) {
+        const metaFile = store.getFileByPath(scriptFile.path + '.meta');
+        if (metaFile) {
+          const guidRow = store.getGuidByFileId(metaFile.id);
+          if (guidRow) {
+            components = store.getComponentsByScriptGuid(guidRow.guid, fileId);
+          }
+        }
+      }
+    }
+  }
 
   return {
     token_hint: components.length * 5,

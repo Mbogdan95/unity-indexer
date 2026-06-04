@@ -257,6 +257,30 @@ export class Store {
     }));
   }
 
+  getComponentsByScriptGuid(scriptGuid: string, fileId?: number): (ComponentRow & { id: number })[] {
+    const rows = fileId !== undefined
+      ? (this.db
+          .prepare(
+            `SELECT c.* FROM components c
+             JOIN game_objects g ON g.id = c.game_object_id
+             WHERE c.script_guid = ? AND g.file_id = ?`,
+          )
+          .all(scriptGuid, fileId) as Record<string, unknown>[])
+      : (this.db
+          .prepare('SELECT * FROM components WHERE script_guid = ?')
+          .all(scriptGuid) as Record<string, unknown>[]);
+    return rows.map(row => ({
+      id: row.id as number,
+      game_object_id: row.game_object_id as number,
+      type_name: row.type_name as string,
+      script_guid: row.script_guid as string | null,
+      order: row.order as number,
+      serialized_fields: row.serialized_fields as string,
+      field_summary: row.field_summary as string,
+      pattern_hash: row.pattern_hash as string,
+    }));
+  }
+
   getComponentsByType(typeName: string, fileId?: number): (ComponentRow & { id: number })[] {
     const rows = fileId !== undefined
       ? (this.db
