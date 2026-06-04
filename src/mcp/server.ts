@@ -17,17 +17,31 @@ function removeStaleJournals(dbPath: string): void {
   }
 }
 
+function log(msg: string): void {
+  console.error(`[unity-indexer] ${msg}`);
+}
+
 export async function startServer(projectRoot: string, dbPath: string): Promise<void> {
   removeStaleJournals(dbPath);
+  log(`project: ${projectRoot}`);
+  log(`database: ${dbPath}`);
+
+  log('initializing C# parser...');
   await initScriptParser();
 
   const store = new Store(dbPath);
   const indexer = new Indexer(store, projectRoot);
 
+  log('indexing project...');
+  const start = Date.now();
   indexer.indexAll();
+  const summary = store.getProjectSummary();
+  const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+  log(`indexed in ${elapsed}s — ${summary.scene_count} scenes, ${summary.prefab_count} prefabs, ${summary.script_count} scripts`);
 
   const watcher = new FileWatcher(indexer, projectRoot);
   watcher.start();
+  log('file watcher started');
 
   const server = new McpServer({
     name: 'unity-indexer',
@@ -68,6 +82,7 @@ export async function startServer(projectRoot: string, dbPath: string): Promise<
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  log('MCP server ready');
 
   const cleanup = () => {
     watcher.stop();
