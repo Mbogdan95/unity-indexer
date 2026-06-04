@@ -1,7 +1,7 @@
 import { watch, type FSWatcher } from "chokidar";
 import { relative } from "path";
 import { existsSync } from "fs";
-import { Indexer } from "./indexer.js";
+import type { Indexer } from "./indexer.js";
 import { detectFileType } from "../types.js";
 
 export class FileWatcher {
@@ -33,18 +33,24 @@ export class FileWatcher {
       ignored: ["**/Library/**", "**/Temp/**", "**/obj/**", "**/*.tmp"],
     });
 
-    this.watcher.on("add", (path) => this.onFileEvent(path, "add"));
-    this.watcher.on("change", (path) => this.onFileEvent(path, "change"));
-    this.watcher.on("unlink", (path) => this.onFileEvent(path, "unlink"));
+    this.watcher.on("add", (path) => {
+      this.onFileEvent(path, "add");
+    });
+    this.watcher.on("change", (path) => {
+      this.onFileEvent(path, "change");
+    });
+    this.watcher.on("unlink", (path) => {
+      this.onFileEvent(path, "unlink");
+    });
     this.watcher.on("error", (err: unknown) => {
-      console.error(`[unity-indexer] watcher error: ${err}`);
+      console.error(`[unity-indexer] watcher error: ${String(err)}`);
     });
   }
 
   stop(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     if (this.bulkTimer) clearTimeout(this.bulkTimer);
-    this.watcher?.close();
+    void this.watcher?.close();
     this.watcher = null;
   }
 
@@ -56,7 +62,9 @@ export class FileWatcher {
     this.bulkCount++;
 
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
-    this.debounceTimer = setTimeout(() => this.flush(), this.debounceMs);
+    this.debounceTimer = setTimeout(() => {
+      this.flush();
+    }, this.debounceMs);
 
     if (!this.bulkTimer) {
       this.bulkTimer = setTimeout(() => {

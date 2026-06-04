@@ -19,7 +19,7 @@ export function handleGetSceneHierarchy(
 
   const filtered = allGOs.filter((go) => {
     if (go.depth > maxDepth) return false;
-    if (filterLower) {
+    if (filterLower !== undefined) {
       const nameMatch = go.name.toLowerCase().includes(filterLower);
       const tagMatch = go.tag.toLowerCase().includes(filterLower);
       if (!nameMatch && !tagMatch) return false;
@@ -89,9 +89,11 @@ export function handleListScripts(
 
 export function handleListAssets(store: Store, params: { type?: string }): object {
   const files = store.listFiles("asset");
-  const filtered = params.type
-    ? files.filter((f) => f.summary_line.toLowerCase().includes(params.type!.toLowerCase()))
-    : files;
+  const typeFilter = params.type;
+  const filtered =
+    typeFilter !== undefined
+      ? files.filter((f) => f.summary_line.toLowerCase().includes(typeFilter.toLowerCase()))
+      : files;
 
   return {
     token_hint: filtered.length * 3,
@@ -263,7 +265,7 @@ export function handleFindReferences(store: Store, params: { guid_or_name: strin
     references: refs.map((r) => {
       const sourceFile = store.getFileById(r.source_file_id);
       return {
-        source_file: sourceFile?.path ?? `file_id:${r.source_file_id}`,
+        source_file: sourceFile?.path ?? `file_id:${String(r.source_file_id)}`,
         context: r.source_context,
         ref_type: r.ref_type,
       };
@@ -303,7 +305,7 @@ export function handleFindDependencies(store: Store, params: { guid_or_name: str
     token_hint: refs.length * 5,
     source: params.guid_or_name,
     dependencies: refs.map((r) => {
-      const targetFile = r.target_file_id ? store.getFileById(r.target_file_id) : null;
+      const targetFile = r.target_file_id !== null ? store.getFileById(r.target_file_id) : null;
       return {
         target_guid: r.target_guid,
         target_file: targetFile?.path ?? null,
@@ -323,7 +325,7 @@ export function handleResolveGuid(store: Store, params: { guid: string }): objec
 
   const file = store.getFileById(guidRow.file_id);
   let path = file?.path ?? null;
-  if (path?.endsWith(".meta")) {
+  if (path !== null && path.endsWith(".meta")) {
     path = path.slice(0, -5);
   }
   return {
@@ -379,7 +381,7 @@ export function handleFindComponents(
 ): object {
   let fileId: number | undefined;
 
-  if (params.scene) {
+  if (params.scene !== undefined) {
     const file = store.getFileByPath(params.scene);
     if (!file) return { token_hint: 10, error: `File not found: ${params.scene}` };
     fileId = file.id;
@@ -428,7 +430,9 @@ export function handleRecentChanges(
   const limit = params.limit ?? 50;
   const changes = store.getRecentChanges(limit);
 
-  const filtered = params.since ? changes.filter((c) => c.changed_at > params.since!) : changes;
+  const sinceFilter = params.since;
+  const filtered =
+    sinceFilter !== undefined ? changes.filter((c) => c.changed_at > sinceFilter) : changes;
 
   return {
     token_hint: filtered.length * 3,
@@ -450,148 +454,179 @@ export function registerTools(server: McpServer, store: Store): void {
     content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
   });
 
-  server.tool(
+  server.registerTool(
     "get_scene_hierarchy",
-    "Get the GameObject hierarchy for a scene or prefab file.",
     {
-      scene: z.string().describe("Relative path to the scene or prefab file"),
-      depth: z.number().int().optional().describe("Max depth to include (0 = roots only)"),
-      filter: z.string().optional().describe("Filter by name or tag substring"),
+      description: "Get the GameObject hierarchy for a scene or prefab file.",
+      inputSchema: {
+        scene: z.string().describe("Relative path to the scene or prefab file"),
+        depth: z.number().int().optional().describe("Max depth to include (0 = roots only)"),
+        filter: z.string().optional().describe("Filter by name or tag substring"),
+      },
     },
-    async (params) => toContent(handleGetSceneHierarchy(store, params)),
+    (params) => toContent(handleGetSceneHierarchy(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "get_prefab_structure",
-    "Get the GameObject structure for a prefab file.",
     {
-      prefab: z.string().describe("Relative path to the prefab file"),
-      depth: z.number().int().optional().describe("Max depth to include"),
-      filter: z.string().optional().describe("Filter by name or tag substring"),
+      description: "Get the GameObject structure for a prefab file.",
+      inputSchema: {
+        prefab: z.string().describe("Relative path to the prefab file"),
+        depth: z.number().int().optional().describe("Max depth to include"),
+        filter: z.string().optional().describe("Filter by name or tag substring"),
+      },
     },
-    async (params) => toContent(handleGetPrefabStructure(store, params)),
+    (params) => toContent(handleGetPrefabStructure(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "list_scripts",
-    "List C# scripts with optional filters.",
     {
-      namespace: z.string().optional().describe("Filter by namespace"),
-      base_class: z.string().optional().describe("Filter by base class"),
-      assembly: z.string().optional().describe("Filter by assembly name"),
-      is_monobehaviour: z.boolean().optional().describe("Filter MonoBehaviour scripts only"),
+      description: "List C# scripts with optional filters.",
+      inputSchema: {
+        namespace: z.string().optional().describe("Filter by namespace"),
+        base_class: z.string().optional().describe("Filter by base class"),
+        assembly: z.string().optional().describe("Filter by assembly name"),
+        is_monobehaviour: z.boolean().optional().describe("Filter MonoBehaviour scripts only"),
+      },
     },
-    async (params) => toContent(handleListScripts(store, params)),
+    (params) => toContent(handleListScripts(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "list_assets",
-    "List Unity asset files (.asset), optionally filtered by type.",
     {
-      type: z.string().optional().describe("Filter by asset type name substring"),
+      description: "List Unity asset files (.asset), optionally filtered by type.",
+      inputSchema: {
+        type: z.string().optional().describe("Filter by asset type name substring"),
+      },
     },
-    async (params) => toContent(handleListAssets(store, params)),
+    (params) => toContent(handleListAssets(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "get_game_object",
-    "Get full details for a specific GameObject in a scene or prefab.",
     {
-      scene: z.string().describe("Relative path to the scene or prefab file"),
-      name_or_id: z.string().describe("GameObject name"),
+      description: "Get full details for a specific GameObject in a scene or prefab.",
+      inputSchema: {
+        scene: z.string().describe("Relative path to the scene or prefab file"),
+        name_or_id: z.string().describe("GameObject name"),
+      },
     },
-    async (params) => toContent(handleGetGameObject(store, params)),
+    (params) => toContent(handleGetGameObject(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "get_component",
-    "Get a specific component on a GameObject.",
     {
-      scene: z.string().describe("Relative path to the scene or prefab file"),
-      game_object: z.string().describe("GameObject name"),
-      component_type: z
-        .string()
-        .describe('Component type name (e.g. "Rigidbody", "PlayerController")'),
+      description: "Get a specific component on a GameObject.",
+      inputSchema: {
+        scene: z.string().describe("Relative path to the scene or prefab file"),
+        game_object: z.string().describe("GameObject name"),
+        component_type: z
+          .string()
+          .describe('Component type name (e.g. "Rigidbody", "PlayerController")'),
+      },
     },
-    async (params) => toContent(handleGetComponent(store, params)),
+    (params) => toContent(handleGetComponent(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "get_script_detail",
-    "Get detailed info about a C# class including all members.",
     {
-      class_name: z.string().describe("C# class name"),
+      description: "Get detailed info about a C# class including all members.",
+      inputSchema: {
+        class_name: z.string().describe("C# class name"),
+      },
     },
-    async (params) => toContent(handleGetScriptDetail(store, params)),
+    (params) => toContent(handleGetScriptDetail(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "get_script_member",
-    "Get details about a specific member of a C# class.",
     {
-      class_name: z.string().describe("C# class name"),
-      member_name: z.string().describe("Member name (field, method, property, etc.)"),
+      description: "Get details about a specific member of a C# class.",
+      inputSchema: {
+        class_name: z.string().describe("C# class name"),
+        member_name: z.string().describe("Member name (field, method, property, etc.)"),
+      },
     },
-    async (params) => toContent(handleGetScriptMember(store, params)),
+    (params) => toContent(handleGetScriptMember(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "find_references",
-    "Find all files/objects that reference a given GUID or script class name.",
     {
-      guid_or_name: z.string().describe("Asset GUID or script class name"),
+      description: "Find all files/objects that reference a given GUID or script class name.",
+      inputSchema: {
+        guid_or_name: z.string().describe("Asset GUID or script class name"),
+      },
     },
-    async (params) => toContent(handleFindReferences(store, params)),
+    (params) => toContent(handleFindReferences(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "find_dependencies",
-    "Find all dependencies (outgoing references) of a file, script class, or GUID.",
     {
-      guid_or_name: z.string().describe("File path, script class name, or GUID"),
+      description: "Find all dependencies (outgoing references) of a file, script class, or GUID.",
+      inputSchema: {
+        guid_or_name: z.string().describe("File path, script class name, or GUID"),
+      },
     },
-    async (params) => toContent(handleFindDependencies(store, params)),
+    (params) => toContent(handleFindDependencies(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "resolve_guid",
-    "Resolve a Unity GUID to a file path and asset type.",
     {
-      guid: z.string().describe("Unity asset GUID"),
+      description: "Resolve a Unity GUID to a file path and asset type.",
+      inputSchema: {
+        guid: z.string().describe("Unity asset GUID"),
+      },
     },
-    async (params) => toContent(handleResolveGuid(store, params)),
+    (params) => toContent(handleResolveGuid(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "search",
-    "Search the index for files, GameObjects, or scripts matching a query.",
     {
-      query: z.string().describe("Search query"),
-      scope: z
-        .enum(["files", "game_objects", "scripts"])
-        .optional()
-        .describe("Limit search to a specific scope"),
+      description: "Search the index for files, GameObjects, or scripts matching a query.",
+      inputSchema: {
+        query: z.string().describe("Search query"),
+        scope: z
+          .enum(["files", "game_objects", "scripts"])
+          .optional()
+          .describe("Limit search to a specific scope"),
+      },
     },
-    async (params) => toContent(handleSearch(store, params)),
+    (params) => toContent(handleSearch(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "find_components",
-    "Find all GameObjects that have a specific component type attached.",
     {
-      type: z.string().describe("Component type name"),
-      scene: z.string().optional().describe("Limit search to this scene or prefab file"),
+      description: "Find all GameObjects that have a specific component type attached.",
+      inputSchema: {
+        type: z.string().describe("Component type name"),
+        scene: z.string().optional().describe("Limit search to this scene or prefab file"),
+      },
     },
-    async (params) => toContent(handleFindComponents(store, params)),
+    (params) => toContent(handleFindComponents(store, params)),
   );
 
-  server.tool(
+  server.registerTool(
     "recent_changes",
-    "Get recently changed files from the change log.",
     {
-      since: z.string().optional().describe("ISO 8601 timestamp — only return changes after this"),
-      limit: z.number().int().optional().describe("Max number of changes to return (default 50)"),
+      description: "Get recently changed files from the change log.",
+      inputSchema: {
+        since: z
+          .string()
+          .optional()
+          .describe("ISO 8601 timestamp — only return changes after this"),
+        limit: z.number().int().optional().describe("Max number of changes to return (default 50)"),
+      },
     },
-    async (params) => toContent(handleRecentChanges(store, params)),
+    (params) => toContent(handleRecentChanges(store, params)),
   );
 }

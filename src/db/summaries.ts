@@ -16,7 +16,7 @@ export function generateComponentSummary(
 ): string {
   return components
     .map((c) => {
-      if (c.typeName === "MonoBehaviour" && c.scriptGuid) {
+      if (c.typeName === "MonoBehaviour" && c.scriptGuid !== null) {
         return guidToClassName.get(c.scriptGuid) ?? "MonoBehaviour";
       }
       return c.typeName;
@@ -39,9 +39,9 @@ export function generateSubtreeSummary(name: string, childNames: string[]): stri
   const rest = childNames.length - shown.length;
 
   let childList = shown.join(", ");
-  if (rest > 0) childList += `, ...+${rest} more`;
+  if (rest > 0) childList += `, ...+${String(rest)} more`;
 
-  return `${name} [${childNames.length} children: ${childList}]`;
+  return `${name} [${String(childNames.length)} children: ${childList}]`;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ export function generateFieldSummary(
         parts.push(`${key}={...}`);
       }
     } else {
-      parts.push(`${key}=${value}`);
+      parts.push(`${key}=${String(value)}`);
     }
   }
 
@@ -196,28 +196,32 @@ export function generateFileSummaryLine(
 ): string {
   switch (type) {
     case "scene": {
-      const goCount = stats.gameObjectCount ?? 0;
-      const scriptCount = stats.scriptCount ?? 0;
-      return `${fileName} — ${goCount} GameObjects, ${scriptCount} scripts`;
+      const goCount = Number(stats.gameObjectCount ?? 0);
+      const scriptCount = Number(stats.scriptCount ?? 0);
+      return `${fileName} — ${String(goCount)} GameObjects, ${String(scriptCount)} scripts`;
     }
     case "prefab": {
-      const variant = stats.isVariant ? "prefab variant" : "prefab";
-      const goCount = stats.gameObjectCount ?? 0;
-      return `${fileName} — ${variant}, ${goCount} GameObjects`;
+      const variant = stats.isVariant === true ? "prefab variant" : "prefab";
+      const goCount = Number(stats.gameObjectCount ?? 0);
+      return `${fileName} — ${variant}, ${String(goCount)} GameObjects`;
     }
     case "script": {
-      const className = stats.className ?? "";
-      const baseClass = stats.baseClass ?? "";
-      const memberCount = stats.memberCount ?? 0;
-      const classHeader = baseClass ? `${className} : ${baseClass}` : String(className);
-      return `${fileName} — ${classHeader}, ${memberCount} members`;
+      const rawClassName = stats.className;
+      const className = typeof rawClassName === "string" ? rawClassName : "";
+      const rawBaseClass = stats.baseClass;
+      const baseClass = typeof rawBaseClass === "string" ? rawBaseClass : "";
+      const memberCount = Number(stats.memberCount ?? 0);
+      const classHeader = baseClass !== "" ? `${className} : ${baseClass}` : className;
+      return `${fileName} — ${classHeader}, ${String(memberCount)} members`;
     }
     case "asset": {
-      const typeName = stats.typeName ?? "";
+      const rawTypeName = stats.typeName;
+      const typeName = typeof rawTypeName === "string" ? rawTypeName : "";
       return `${fileName} — ${typeName}`;
     }
     case "asmdef": {
-      const assemblyName = stats.assemblyName ?? "";
+      const rawAsmName = stats.assemblyName;
+      const assemblyName = typeof rawAsmName === "string" ? rawAsmName : "";
       return `${fileName} — assembly: ${assemblyName}`;
     }
     default:

@@ -147,14 +147,15 @@ export class Store {
   }
 
   listFiles(type?: string): (FileRow & { id: number })[] {
-    const rows = type
-      ? (this.db
-          .prepare("SELECT * FROM files WHERE type = ? ORDER BY importance_score DESC")
-          .all(type) as Record<string, unknown>[])
-      : (this.db.prepare("SELECT * FROM files ORDER BY importance_score DESC").all() as Record<
-          string,
-          unknown
-        >[]);
+    const rows =
+      type !== undefined
+        ? (this.db
+            .prepare("SELECT * FROM files WHERE type = ? ORDER BY importance_score DESC")
+            .all(type) as Record<string, unknown>[])
+        : (this.db.prepare("SELECT * FROM files ORDER BY importance_score DESC").all() as Record<
+            string,
+            unknown
+          >[]);
     return rows.map(fileRowOut);
   }
 

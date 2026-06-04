@@ -4,8 +4,7 @@ import type { ParsedAsset } from "../types.js";
 
 export function parseAsset(content: string): ParsedAsset {
   const docs = parseUnityYaml(content);
-  const mainDoc = docs.find((d) => d.classId === 114) ?? docs[0];
-  if (!mainDoc) {
+  if (docs.length === 0) {
     return {
       typeName: "Unknown",
       name: "",
@@ -14,18 +13,20 @@ export function parseAsset(content: string): ParsedAsset {
       references: [],
     };
   }
+  const mainDoc = docs.find((d) => d.classId === 114) ?? docs[0];
 
   const typeName = Object.keys(mainDoc.data)[0] ?? "Unknown";
-  const data = mainDoc.data[typeName] as Record<string, unknown>;
-  if (!data) {
+  const data = mainDoc.data[typeName] as Record<string, unknown> | undefined;
+  if (data === undefined) {
     return { typeName, name: "", scriptGuid: null, serializedFields: {}, references: [] };
   }
 
-  const name = String(data["m_Name"] ?? "");
+  const rawName = data["m_Name"];
+  const name = typeof rawName === "string" ? rawName : "";
   let scriptGuid: string | null = null;
   const scriptRef = data["m_Script"] as Record<string, unknown> | undefined;
-  if (scriptRef && scriptRef["guid"]) {
-    scriptGuid = String(scriptRef["guid"]);
+  if (scriptRef !== undefined && typeof scriptRef["guid"] === "string") {
+    scriptGuid = scriptRef["guid"];
   }
 
   const stripped = stripDefaults("MonoBehaviour", data);

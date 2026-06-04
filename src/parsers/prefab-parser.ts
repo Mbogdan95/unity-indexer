@@ -15,9 +15,9 @@ export function parsePrefab(content: string): ParsedPrefab {
       if (!typeName) continue;
       const data = doc.data[typeName] as Record<string, unknown>;
       const sourcePrefab = data["m_SourcePrefab"] as Record<string, unknown> | undefined;
-      if (sourcePrefab && sourcePrefab["guid"]) {
+      if (sourcePrefab !== undefined && typeof sourcePrefab["guid"] === "string") {
         isVariant = true;
-        sourcePrefabGuid = String(sourcePrefab["guid"]);
+        sourcePrefabGuid = sourcePrefab["guid"];
       }
     }
   }

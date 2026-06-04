@@ -14,7 +14,9 @@ function removeStaleJournals(dbPath: string): void {
     if (existsSync(p)) {
       try {
         unlinkSync(p);
-      } catch {}
+      } catch {
+        // Stale journal removal is best-effort
+      }
     }
   }
 }
@@ -40,7 +42,7 @@ export async function startServer(projectRoot: string, dbPath: string): Promise<
   const summary = store.getProjectSummary();
   const elapsed = ((Date.now() - start) / 1000).toFixed(1);
   log(
-    `indexed in ${elapsed}s — ${summary.scene_count} scenes, ${summary.prefab_count} prefabs, ${summary.script_count} scripts`,
+    `indexed in ${elapsed}s — ${String(summary.scene_count)} scenes, ${String(summary.prefab_count)} prefabs, ${String(summary.script_count)} scripts`,
   );
 
   const watcher = new FileWatcher(indexer, projectRoot);
@@ -52,11 +54,11 @@ export async function startServer(projectRoot: string, dbPath: string): Promise<
     version: "0.1.0",
   });
 
-  server.resource(
+  server.registerResource(
     "project-summary",
     "unity://project/summary",
     { description: "Project overview — read this first. ~200 tokens." },
-    async () => ({
+    () => ({
       contents: [
         {
           uri: "unity://project/summary",
@@ -67,11 +69,11 @@ export async function startServer(projectRoot: string, dbPath: string): Promise<
     }),
   );
 
-  server.resource(
+  server.registerResource(
     "project-files",
     "unity://project/files",
     { description: "All project files sorted by importance. Paginated." },
-    async () => ({
+    () => ({
       contents: [
         {
           uri: "unity://project/files",
@@ -92,7 +94,9 @@ export async function startServer(projectRoot: string, dbPath: string): Promise<
     watcher.stop();
     try {
       store.close();
-    } catch {}
+    } catch {
+      // Best-effort cleanup on shutdown
+    }
   };
 
   process.on("SIGINT", () => {

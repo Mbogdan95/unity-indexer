@@ -15,12 +15,12 @@ export function parseUnityYaml(content: string): UnityYamlDocument[] {
     const classId = parseInt(headerMatch[1], 10);
     const fileId = headerMatch[2];
     const stripped = raw.header.includes("stripped");
-    const typeName = UNITY_CLASS_IDS[classId] ?? `UnknownType_${classId}`;
+    const typeName = UNITY_CLASS_IDS[classId] ?? `UnknownType_${String(classId)}`;
 
-    let data: Record<string, unknown> = {};
+    let data: Record<string, unknown>;
     try {
       const doc = parseDocument(raw.body, { uniqueKeys: false });
-      data = doc.toJS({ maxAliasCount: -1 }) ?? {};
+      data = (doc.toJS({ maxAliasCount: -1 }) as Record<string, unknown> | null) ?? {};
     } catch {
       data = parseYamlFallback(raw.body);
     }
@@ -109,7 +109,7 @@ function walkForReferences(obj: unknown, context: string, refs: ParsedGuidRefere
     }
   } else if (Array.isArray(obj)) {
     for (let i = 0; i < obj.length; i++) {
-      walkForReferences(obj[i], `${context}[${i}]`, refs);
+      walkForReferences(obj[i], `${context}[${String(i)}]`, refs);
     }
   }
 }

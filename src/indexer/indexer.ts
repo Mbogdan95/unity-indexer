@@ -1,7 +1,7 @@
 import { readFileSync, statSync, readdirSync } from "fs";
 import { join, relative, basename } from "path";
 import { createHash } from "crypto";
-import { Store } from "../db/store.js";
+import type { Store } from "../db/store.js";
 import { parseScene } from "../parsers/scene-parser.js";
 import { parsePrefab } from "../parsers/prefab-parser.js";
 import { parseAsset } from "../parsers/asset-parser.js";
@@ -19,7 +19,7 @@ import {
   computeFileImportance,
 } from "../db/summaries.js";
 import { detectFileType } from "../types.js";
-import type { FileRow, UnityFileType, ParsedGameObject, ParsedGuidReference } from "../types.js";
+import type { ParsedGameObject, ParsedGuidReference } from "../types.js";
 
 function log(msg: string): void {
   console.error(`[unity-indexer] ${msg}`);
@@ -39,13 +39,13 @@ export class Indexer {
 
   indexAll(): void {
     const files = this.collectFiles();
-    log(`found ${files.length} files to index`);
+    log(`found ${String(files.length)} files to index`);
 
     const metaFiles = files.filter((f) => f.endsWith(".meta"));
     const otherFiles = files.filter((f) => !f.endsWith(".meta"));
 
     // Index meta files first in batches (GUID registry needed by other parsers)
-    log(`indexing ${metaFiles.length} meta files...`);
+    log(`indexing ${String(metaFiles.length)} meta files...`);
     this.indexBatch(metaFiles);
 
     // Index scripts before scenes/prefabs so guidToClassMap is populated
@@ -56,16 +56,16 @@ export class Indexer {
       (f) => f.endsWith(".unity") || f.endsWith(".prefab"),
     );
 
-    if (scripts.length) {
-      log(`indexing ${scripts.length} script files...`);
+    if (scripts.length > 0) {
+      log(`indexing ${String(scripts.length)} script files...`);
       this.indexBatch(scripts);
     }
-    if (asmdefs.length) {
-      log(`indexing ${asmdefs.length} asmdef files...`);
+    if (asmdefs.length > 0) {
+      log(`indexing ${String(asmdefs.length)} asmdef files...`);
       this.indexBatch(asmdefs);
     }
-    if (assets.length) {
-      log(`indexing ${assets.length} asset files...`);
+    if (assets.length > 0) {
+      log(`indexing ${String(assets.length)} asset files...`);
       this.indexBatch(assets);
     }
 
@@ -73,8 +73,8 @@ export class Indexer {
     log("building GUID → class map...");
     this.guidToClassCache = this.buildGuidToClassMap();
 
-    if (scenesAndPrefabs.length) {
-      log(`indexing ${scenesAndPrefabs.length} scene/prefab files...`);
+    if (scenesAndPrefabs.length > 0) {
+      log(`indexing ${String(scenesAndPrefabs.length)} scene/prefab files...`);
       this.indexBatch(scenesAndPrefabs);
     }
 
@@ -94,7 +94,7 @@ export class Indexer {
         }
       });
       if (files.length > batchSize && i + batchSize < files.length) {
-        log(`  ${Math.min(i + batchSize, files.length)}/${files.length}`);
+        log(`  ${String(Math.min(i + batchSize, files.length))}/${String(files.length)}`);
       }
     }
   }
@@ -221,7 +221,7 @@ export class Indexer {
         changed_at: new Date().toISOString(),
         change_type: changeType,
       });
-    } catch (err) {
+    } catch {
       // Mark as partial on parse error
       this.store.upsertFile({
         path: relativePath,
@@ -457,7 +457,7 @@ export class Indexer {
     const roots: ParsedGameObject[] = [];
 
     for (const go of gameObjects) {
-      if (go.parentFileIdLocal) {
+      if (go.parentFileIdLocal !== null) {
         const siblings = childMap.get(go.parentFileIdLocal) ?? [];
         siblings.push(go);
         childMap.set(go.parentFileIdLocal, siblings);
@@ -629,9 +629,9 @@ export class Indexer {
     const scriptCount = fileCounts["script"] ?? 0;
 
     const description =
-      `Unity project with ${sceneCount} scene${sceneCount !== 1 ? "s" : ""}, ` +
-      `${prefabCount} prefab${prefabCount !== 1 ? "s" : ""}, ` +
-      `and ${scriptCount} script${scriptCount !== 1 ? "s" : ""}.`;
+      `Unity project with ${String(sceneCount)} scene${sceneCount !== 1 ? "s" : ""}, ` +
+      `${String(prefabCount)} prefab${prefabCount !== 1 ? "s" : ""}, ` +
+      `and ${String(scriptCount)} script${scriptCount !== 1 ? "s" : ""}.`;
 
     // Hot scripts: most-referenced script files
     const topRefs = this.store.getTopReferencedFiles(10);
