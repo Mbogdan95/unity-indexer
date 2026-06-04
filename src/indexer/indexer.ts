@@ -26,6 +26,10 @@ import type {
   ParsedGuidReference,
 } from '../types.js';
 
+function log(msg: string): void {
+  console.error(`[unity-indexer] ${msg}`);
+}
+
 export class Indexer {
   constructor(
     private store: Store,
@@ -38,22 +42,46 @@ export class Indexer {
 
   indexAll(): void {
     const files = this.collectFiles();
+    log(`found ${files.length} files to index`);
 
-    this.store.transaction(() => {
-      // Index meta files first so GUID registry is populated before scene/prefab
-      const metaFiles = files.filter(f => f.endsWith('.meta'));
-      const otherFiles = files.filter(f => !f.endsWith('.meta'));
+    const metaFiles = files.filter(f => f.endsWith('.meta'));
+    const otherFiles = files.filter(f => !f.endsWith('.meta'));
 
-      for (const relPath of metaFiles) {
-        this.indexFileInternal(relPath);
-      }
-      for (const relPath of otherFiles) {
-        this.indexFileInternal(relPath);
-      }
-    });
+    // Index meta files first in batches (GUID registry needed by other parsers)
+    log(`indexing ${metaFiles.length} meta files...`);
+    this.indexBatch(metaFiles);
 
+    // Group remaining files by type for progress
+    const byType = new Map<string, string[]>();
+    for (const f of otherFiles) {
+      const t = detectFileType(f) ?? 'unknown';
+      const arr = byType.get(t) ?? [];
+      arr.push(f);
+      byType.set(t, arr);
+    }
+
+    for (const [type, batch] of byType) {
+      log(`indexing ${batch.length} ${type} files...`);
+      this.indexBatch(batch);
+    }
+
+    log('recomputing reference counts...');
     this.store.recomputeReferenceCounts();
     this.updateProjectSummary();
+  }
+
+  private indexBatch(files: string[], batchSize = 500): void {
+    for (let i = 0; i < files.length; i += batchSize) {
+      const batch = files.slice(i, i + batchSize);
+      this.store.transaction(() => {
+        for (const relPath of batch) {
+          this.indexFileInternal(relPath);
+        }
+      });
+      if (files.length > batchSize && i + batchSize < files.length) {
+        log(`  ${Math.min(i + batchSize, files.length)}/${files.length}`);
+      }
+    }
   }
 
   indexFile(relativePath: string): void {
