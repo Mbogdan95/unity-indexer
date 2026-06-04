@@ -1,5 +1,6 @@
 import { watch, type FSWatcher } from 'chokidar';
 import { relative } from 'path';
+import { existsSync } from 'fs';
 import { Indexer } from './indexer.js';
 import { detectFileType } from '../types.js';
 
@@ -19,20 +20,30 @@ export class FileWatcher {
   ) {}
 
   start(): void {
-    const watchPaths = [
-      `${this.projectRoot}/Assets`,
-      `${this.projectRoot}/Packages`,
-    ];
+    // Only watch Assets/ — Packages/ rarely changes and adds to fd pressure
+    const assetsDir = `${this.projectRoot}/Assets`;
+    if (!existsSync(assetsDir)) return;
 
-    this.watcher = watch(watchPaths, {
+    this.watcher = watch(assetsDir, {
       ignoreInitial: true,
       persistent: true,
-      awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 100 },
+      usePolling: true,
+      interval: 2000,
+      binaryInterval: 5000,
+      ignored: [
+        '**/Library/**',
+        '**/Temp/**',
+        '**/obj/**',
+        '**/*.tmp',
+      ],
     });
 
     this.watcher.on('add', path => this.onFileEvent(path, 'add'));
     this.watcher.on('change', path => this.onFileEvent(path, 'change'));
     this.watcher.on('unlink', path => this.onFileEvent(path, 'unlink'));
+    this.watcher.on('error', (err: unknown) => {
+      console.error(`[unity-indexer] watcher error: ${err}`);
+    });
   }
 
   stop(): void {
