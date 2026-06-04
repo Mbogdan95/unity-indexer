@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Store } from "../db/store.js";
 
+export type StoreResolver = (projectName?: string) => Store;
+
 // ---------------------------------------------------------------------------
 // Handler functions (exported for testing)
 // ---------------------------------------------------------------------------
@@ -449,7 +451,7 @@ export function handleRecentChanges(
 // MCP Tool Registration
 // ---------------------------------------------------------------------------
 
-export function registerTools(server: McpServer, store: Store): void {
+export function registerTools(server: McpServer, resolveStore: StoreResolver): void {
   const toContent = (obj: object) => ({
     content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
   });
@@ -462,9 +464,13 @@ export function registerTools(server: McpServer, store: Store): void {
         scene: z.string().describe("Relative path to the scene or prefab file"),
         depth: z.number().int().optional().describe("Max depth to include (0 = roots only)"),
         filter: z.string().optional().describe("Filter by name or tag substring"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleGetSceneHierarchy(store, params)),
+    (params) => toContent(handleGetSceneHierarchy(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -475,9 +481,13 @@ export function registerTools(server: McpServer, store: Store): void {
         prefab: z.string().describe("Relative path to the prefab file"),
         depth: z.number().int().optional().describe("Max depth to include"),
         filter: z.string().optional().describe("Filter by name or tag substring"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleGetPrefabStructure(store, params)),
+    (params) => toContent(handleGetPrefabStructure(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -489,9 +499,13 @@ export function registerTools(server: McpServer, store: Store): void {
         base_class: z.string().optional().describe("Filter by base class"),
         assembly: z.string().optional().describe("Filter by assembly name"),
         is_monobehaviour: z.boolean().optional().describe("Filter MonoBehaviour scripts only"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleListScripts(store, params)),
+    (params) => toContent(handleListScripts(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -500,9 +514,13 @@ export function registerTools(server: McpServer, store: Store): void {
       description: "List Unity asset files (.asset), optionally filtered by type.",
       inputSchema: {
         type: z.string().optional().describe("Filter by asset type name substring"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleListAssets(store, params)),
+    (params) => toContent(handleListAssets(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -512,9 +530,13 @@ export function registerTools(server: McpServer, store: Store): void {
       inputSchema: {
         scene: z.string().describe("Relative path to the scene or prefab file"),
         name_or_id: z.string().describe("GameObject name"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleGetGameObject(store, params)),
+    (params) => toContent(handleGetGameObject(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -527,9 +549,13 @@ export function registerTools(server: McpServer, store: Store): void {
         component_type: z
           .string()
           .describe('Component type name (e.g. "Rigidbody", "PlayerController")'),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleGetComponent(store, params)),
+    (params) => toContent(handleGetComponent(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -538,9 +564,13 @@ export function registerTools(server: McpServer, store: Store): void {
       description: "Get detailed info about a C# class including all members.",
       inputSchema: {
         class_name: z.string().describe("C# class name"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleGetScriptDetail(store, params)),
+    (params) => toContent(handleGetScriptDetail(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -550,9 +580,13 @@ export function registerTools(server: McpServer, store: Store): void {
       inputSchema: {
         class_name: z.string().describe("C# class name"),
         member_name: z.string().describe("Member name (field, method, property, etc.)"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleGetScriptMember(store, params)),
+    (params) => toContent(handleGetScriptMember(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -561,9 +595,13 @@ export function registerTools(server: McpServer, store: Store): void {
       description: "Find all files/objects that reference a given GUID or script class name.",
       inputSchema: {
         guid_or_name: z.string().describe("Asset GUID or script class name"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleFindReferences(store, params)),
+    (params) => toContent(handleFindReferences(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -572,9 +610,13 @@ export function registerTools(server: McpServer, store: Store): void {
       description: "Find all dependencies (outgoing references) of a file, script class, or GUID.",
       inputSchema: {
         guid_or_name: z.string().describe("File path, script class name, or GUID"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleFindDependencies(store, params)),
+    (params) => toContent(handleFindDependencies(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -583,9 +625,13 @@ export function registerTools(server: McpServer, store: Store): void {
       description: "Resolve a Unity GUID to a file path and asset type.",
       inputSchema: {
         guid: z.string().describe("Unity asset GUID"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleResolveGuid(store, params)),
+    (params) => toContent(handleResolveGuid(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -598,9 +644,13 @@ export function registerTools(server: McpServer, store: Store): void {
           .enum(["files", "game_objects", "scripts"])
           .optional()
           .describe("Limit search to a specific scope"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleSearch(store, params)),
+    (params) => toContent(handleSearch(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -610,9 +660,13 @@ export function registerTools(server: McpServer, store: Store): void {
       inputSchema: {
         type: z.string().describe("Component type name"),
         scene: z.string().optional().describe("Limit search to this scene or prefab file"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleFindComponents(store, params)),
+    (params) => toContent(handleFindComponents(resolveStore(params.project), params)),
   );
 
   server.registerTool(
@@ -625,8 +679,12 @@ export function registerTools(server: McpServer, store: Store): void {
           .optional()
           .describe("ISO 8601 timestamp — only return changes after this"),
         limit: z.number().int().optional().describe("Max number of changes to return (default 50)"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
       },
     },
-    (params) => toContent(handleRecentChanges(store, params)),
+    (params) => toContent(handleRecentChanges(resolveStore(params.project), params)),
   );
 }
