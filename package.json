@@ -4,7 +4,9 @@
   "description": "Unity-specialized MCP server for token-efficient code exploration",
   "type": "module",
   "main": "dist/index.js",
-  "files": ["dist/"],
+  "files": [
+    "dist/"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -13,7 +15,12 @@
   },
   "types": "./dist/index.d.ts",
   "license": "MIT",
-  "keywords": ["unity", "mcp", "indexer", "model-context-protocol"],
+  "keywords": [
+    "unity",
+    "mcp",
+    "indexer",
+    "model-context-protocol"
+  ],
   "bin": {
     "unity-indexer": "dist/index.js"
   },
@@ -22,10 +29,15 @@
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "ci": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build",
+    "prepare": "husky",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "engines": {
     "node": ">=18"
