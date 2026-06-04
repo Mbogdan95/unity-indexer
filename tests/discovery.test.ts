@@ -99,19 +99,17 @@ describe("discoverUnityProjects", () => {
 });
 
 describe("ensureDbDir", () => {
-  it("creates .unity-indexer dir with .gitignore and returns db path", () => {
-    makeUnityProject(TMP);
-    const dbPath = ensureDbDir(TMP);
-    expect(dbPath).toBe(join(TMP, ".unity-indexer", "index.db"));
+  it("creates .unity-indexer dir with .gitignore and returns dir path", () => {
+    const dbDir = ensureDbDir(TMP);
+    expect(dbDir).toBe(join(TMP, ".unity-indexer"));
     expect(existsSync(join(TMP, ".unity-indexer"))).toBe(true);
     const gitignore = readFileSync(join(TMP, ".unity-indexer", ".gitignore"), "utf8");
     expect(gitignore).toBe("*\n");
   });
 
   it("is idempotent", () => {
-    makeUnityProject(TMP);
     ensureDbDir(TMP);
-    const dbPath = ensureDbDir(TMP);
-    expect(dbPath).toBe(join(TMP, ".unity-indexer", "index.db"));
+    const dbDir = ensureDbDir(TMP);
+    expect(dbDir).toBe(join(TMP, ".unity-indexer"));
   });
 });

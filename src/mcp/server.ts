@@ -1,5 +1,5 @@
 import { existsSync, unlinkSync } from "fs";
-import { basename } from "path";
+import { basename, join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { Store } from "../db/store.js";
@@ -52,6 +52,9 @@ export async function startServer(rootDir: string): Promise<void> {
 
   log(`found ${String(projectPaths.length)} Unity project(s)`);
 
+  const dbDir = ensureDbDir(rootDir);
+  log(`database dir: ${dbDir}`);
+
   log("initializing C# parser...");
   await initScriptParser();
 
@@ -62,7 +65,7 @@ export async function startServer(rootDir: string): Promise<void> {
     const name = uniqueName(basename(projectRoot), usedNames);
     usedNames.add(name);
 
-    const dbPath = ensureDbDir(projectRoot);
+    const dbPath = join(dbDir, `${name}.db`);
     removeStaleJournals(dbPath);
     log(`[${name}] project: ${projectRoot}`);
     log(`[${name}] database: ${dbPath}`);

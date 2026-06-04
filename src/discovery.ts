@@ -32,11 +32,11 @@ export function discoverUnityProjects(rootDir: string, maxDepth: number = 3): st
   return results;
 }
 
-export function ensureDbDir(projectRoot: string): string {
-  const dir = join(projectRoot, ".unity-indexer");
+export function ensureDbDir(rootDir: string): string {
+  const dir = join(rootDir, ".unity-indexer");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, ".gitignore"), "*\n");
-  return join(dir, "index.db");
+  return dir;
 }
 
 function walk(dir: string, depth: number, maxDepth: number, results: string[]): void {
