@@ -237,6 +237,7 @@ export interface FileRow {
   summary_line: string;
   importance_score: number;
   status: "ok" | "partial" | "binary" | "error";
+  source_prefab_guid?: string | null;
 }
 
 export interface GameObjectRow {

@@ -10,6 +10,7 @@ import {
   handleSearch,
   handleRecentChanges,
   handleGetGameObject,
+  handleGetComponent,
   handleResolveGuid,
   handleFindComponents,
   type StoreResolver,
@@ -250,6 +251,58 @@ describe("handleFindComponents", () => {
     expect(result.components).toBeDefined();
     const components = result.components as unknown[];
     expect(components.length).toBeGreaterThan(0);
+  });
+});
+
+describe("variant prefab resolution", () => {
+  it("handleGetSceneHierarchy resolves variant to base prefab GameObjects", () => {
+    const result = handleGetSceneHierarchy(store, {
+      scene: "Assets/Prefabs/EnemyVariant.prefab",
+    }) as Record<string, unknown>;
+
+    expect(result.error).toBeUndefined();
+    expect(result.is_variant).toBe(true);
+    expect(result.resolved_from).toBe("Assets/Prefabs/Enemy.prefab");
+    const roots = result.roots as Array<Record<string, unknown>>;
+    expect(roots.length).toBeGreaterThan(0);
+    expect(roots[0].name).toBe("Enemy");
+  });
+
+  it("handleGetGameObject resolves variant to base prefab", () => {
+    const result = handleGetGameObject(store, {
+      scene: "Assets/Prefabs/EnemyVariant.prefab",
+      name_or_id: "Enemy",
+    }) as Record<string, unknown>;
+
+    expect(result.error).toBeUndefined();
+    expect(result.is_variant).toBe(true);
+    expect(result.name).toBe("Enemy");
+    expect(result.components).toBeDefined();
+    const components = result.components as unknown[];
+    expect(components.length).toBeGreaterThan(0);
+  });
+
+  it("handleGetComponent resolves variant to base prefab", () => {
+    const result = handleGetComponent(store, {
+      scene: "Assets/Prefabs/EnemyVariant.prefab",
+      game_object: "Enemy",
+      component_type: "Transform",
+    }) as Record<string, unknown>;
+
+    expect(result.error).toBeUndefined();
+    expect(result.is_variant).toBe(true);
+    expect(result.type_name).toBe("Transform");
+  });
+
+  it("non-variant prefab does not set resolved_from", () => {
+    const result = handleGetSceneHierarchy(store, {
+      scene: "Assets/Prefabs/Enemy.prefab",
+    }) as Record<string, unknown>;
+
+    expect(result.is_variant).toBeUndefined();
+    expect(result.resolved_from).toBeUndefined();
+    const roots = result.roots as Array<Record<string, unknown>>;
+    expect(roots.length).toBeGreaterThan(0);
   });
 });
 

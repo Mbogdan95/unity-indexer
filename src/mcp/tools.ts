@@ -15,7 +15,18 @@ export function handleGetSceneHierarchy(
   const file = store.getFileByPath(params.scene);
   if (!file) return { token_hint: 10, error: `File not found: ${params.scene}` };
 
-  const allGOs = store.getGameObjectsByFile(file.id);
+  let allGOs = store.getGameObjectsByFile(file.id);
+  let resolvedFrom: string | undefined;
+
+  if (allGOs.length === 0 && file.type === "prefab") {
+    const baseFileId = store.resolveVariantBase(file.id);
+    if (baseFileId !== null) {
+      allGOs = store.getGameObjectsByFile(baseFileId);
+      const baseFile = store.getFileById(baseFileId);
+      resolvedFrom = baseFile?.path;
+    }
+  }
+
   const maxDepth = params.depth ?? Infinity;
   const filterLower = params.filter?.toLowerCase();
 
@@ -36,6 +47,7 @@ export function handleGetSceneHierarchy(
   return {
     token_hint: roots.length * 10,
     scene: params.scene,
+    ...(resolvedFrom !== undefined ? { resolved_from: resolvedFrom, is_variant: true } : {}),
     roots: roots.map((go) => ({
       name: go.name,
       components: go.component_summary,
@@ -114,7 +126,18 @@ export function handleGetGameObject(
   const file = store.getFileByPath(params.scene);
   if (!file) return { token_hint: 10, error: `File not found: ${params.scene}` };
 
-  const go = store.getGameObjectByName(file.id, params.name_or_id);
+  let go = store.getGameObjectByName(file.id, params.name_or_id);
+  let resolvedFrom: string | undefined;
+
+  if (!go && file.type === "prefab") {
+    const baseFileId = store.resolveVariantBase(file.id);
+    if (baseFileId !== null) {
+      go = store.getGameObjectByName(baseFileId, params.name_or_id);
+      const baseFile = store.getFileById(baseFileId);
+      resolvedFrom = baseFile?.path;
+    }
+  }
+
   if (!go) return { token_hint: 10, error: `GameObject not found: ${params.name_or_id}` };
 
   const components = store.getComponentsByGameObject(go.id);
@@ -122,6 +145,7 @@ export function handleGetGameObject(
   return {
     token_hint: 50,
     name: go.name,
+    ...(resolvedFrom !== undefined ? { resolved_from: resolvedFrom, is_variant: true } : {}),
     tag: go.tag,
     layer: go.layer,
     active: go.active,
@@ -144,7 +168,18 @@ export function handleGetComponent(
   const file = store.getFileByPath(params.scene);
   if (!file) return { token_hint: 10, error: `File not found: ${params.scene}` };
 
-  const go = store.getGameObjectByName(file.id, params.game_object);
+  let go = store.getGameObjectByName(file.id, params.game_object);
+  let resolvedFrom: string | undefined;
+
+  if (!go && file.type === "prefab") {
+    const baseFileId = store.resolveVariantBase(file.id);
+    if (baseFileId !== null) {
+      go = store.getGameObjectByName(baseFileId, params.game_object);
+      const baseFile = store.getFileById(baseFileId);
+      resolvedFrom = baseFile?.path;
+    }
+  }
+
   if (!go) return { token_hint: 10, error: `GameObject not found: ${params.game_object}` };
 
   const components = store.getComponentsByGameObject(go.id);
@@ -162,6 +197,7 @@ export function handleGetComponent(
   return {
     token_hint: 30,
     game_object: go.name,
+    ...(resolvedFrom !== undefined ? { resolved_from: resolvedFrom, is_variant: true } : {}),
     type_name: comp.type_name,
     script_guid: comp.script_guid,
     field_summary: comp.field_summary,

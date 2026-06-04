@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS files (
   indexed_at      TEXT NOT NULL DEFAULT '',
   summary_line    TEXT NOT NULL DEFAULT '',
   importance_score REAL NOT NULL DEFAULT 0,
-  status          TEXT NOT NULL DEFAULT 'ok'
+  status          TEXT NOT NULL DEFAULT 'ok',
+  source_prefab_guid TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_files_type_importance

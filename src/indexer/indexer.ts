@@ -315,6 +315,7 @@ export class Indexer {
       summary_line: summaryLine,
       importance_score: importance,
       status: "ok",
+      source_prefab_guid: parsed.sourcePrefabGuid,
     });
   }
 

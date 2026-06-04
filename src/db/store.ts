@@ -29,6 +29,7 @@ function fileRowOut(row: Record<string, unknown>): FileRow & { id: number } {
     summary_line: row.summary_line as string,
     importance_score: row.importance_score as number,
     status: row.status as FileRow["status"],
+    source_prefab_guid: (row.source_prefab_guid as string | null) ?? null,
   };
 }
 
@@ -107,16 +108,17 @@ export class Store {
 
   upsertFile(file: FileRow): number {
     const stmt = this.db.prepare(`
-      INSERT INTO files (path, type, content_hash, modified_at, indexed_at, summary_line, importance_score, status)
-      VALUES (@path, @type, @content_hash, @modified_at, @indexed_at, @summary_line, @importance_score, @status)
+      INSERT INTO files (path, type, content_hash, modified_at, indexed_at, summary_line, importance_score, status, source_prefab_guid)
+      VALUES (@path, @type, @content_hash, @modified_at, @indexed_at, @summary_line, @importance_score, @status, @source_prefab_guid)
       ON CONFLICT(path) DO UPDATE SET
-        type             = excluded.type,
-        content_hash     = excluded.content_hash,
-        modified_at      = excluded.modified_at,
-        indexed_at       = excluded.indexed_at,
-        summary_line     = excluded.summary_line,
-        importance_score = excluded.importance_score,
-        status           = excluded.status
+        type               = excluded.type,
+        content_hash       = excluded.content_hash,
+        modified_at        = excluded.modified_at,
+        indexed_at         = excluded.indexed_at,
+        summary_line       = excluded.summary_line,
+        importance_score   = excluded.importance_score,
+        status             = excluded.status,
+        source_prefab_guid = excluded.source_prefab_guid
       RETURNING id
     `);
     const row = stmt.get({
@@ -128,6 +130,7 @@ export class Store {
       summary_line: file.summary_line,
       importance_score: file.importance_score,
       status: file.status,
+      source_prefab_guid: file.source_prefab_guid ?? null,
     }) as { id: number };
     return row.id;
   }
@@ -215,6 +218,45 @@ export class Store {
       .prepare("SELECT * FROM game_objects WHERE file_id = ? AND name = ? LIMIT 1")
       .get(fileId, name) as Record<string, unknown> | undefined;
     return row ? goRowOut(row) : undefined;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Variant Resolution
+  // ---------------------------------------------------------------------------
+
+  resolveVariantBase(fileId: number, maxDepth = 10): number | null {
+    let currentFileId = fileId;
+    const visited = new Set<number>();
+
+    for (let i = 0; i < maxDepth; i++) {
+      if (visited.has(currentFileId)) return null;
+      visited.add(currentFileId);
+
+      const file = this.getFileById(currentFileId);
+      if (
+        file === undefined ||
+        file.source_prefab_guid === undefined ||
+        file.source_prefab_guid === null ||
+        file.source_prefab_guid === ""
+      ) {
+        return currentFileId === fileId ? null : currentFileId;
+      }
+
+      const guidRow = this.resolveGuid(file.source_prefab_guid);
+      if (!guidRow) return null;
+
+      const metaFile = this.getFileById(guidRow.file_id);
+      if (!metaFile) return null;
+
+      const prefabPath = metaFile.path.endsWith(".meta")
+        ? metaFile.path.slice(0, -5)
+        : metaFile.path;
+      const prefabFile = this.getFileByPath(prefabPath);
+      if (!prefabFile) return null;
+
+      currentFileId = prefabFile.id;
+    }
+    return null;
   }
 
   // ---------------------------------------------------------------------------
