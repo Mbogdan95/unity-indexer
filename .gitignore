@@ -4,3 +4,7 @@ dist/
 *.db-wal
 *.db-shm
 .superpowers/
+.env*
+*.tsbuildinfo
+coverage/
+.DS_Store

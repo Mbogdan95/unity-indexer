@@ -1,0 +1,15 @@
+src/
+tests/
+docs/
+.github/
+.claude/
+.superpowers/
+grammars/
+coverage/
+.prettierrc
+.prettierignore
+eslint.config.js
+vitest.config.ts
+tsconfig.json
+.gitignore
+*.db

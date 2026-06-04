@@ -4,6 +4,16 @@
   "description": "Unity-specialized MCP server for token-efficient code exploration",
   "type": "module",
   "main": "dist/index.js",
+  "files": ["dist/"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "license": "MIT",
+  "keywords": ["unity", "mcp", "indexer", "model-context-protocol"],
   "bin": {
     "unity-indexer": "dist/index.js"
   },
