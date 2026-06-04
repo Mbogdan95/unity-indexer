@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "fs";
+import { existsSync, readdirSync, statSync, mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 
 const SKIP_DIRS = new Set([
@@ -22,6 +22,13 @@ export function discoverUnityProjects(rootDir: string, maxDepth: number = 3): st
   walk(root, 0, maxDepth, results);
   results.sort();
   return results;
+}
+
+export function ensureDbDir(projectRoot: string): string {
+  const dir = join(projectRoot, ".unity-indexer");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, ".gitignore"), "*\n");
+  return join(dir, "index.db");
 }
 
 function walk(dir: string, depth: number, maxDepth: number, results: string[]): void {

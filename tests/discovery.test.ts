@@ -1,8 +1,8 @@
 // tests/discovery.test.ts
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync } from "fs";
+import { mkdirSync, rmSync, existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { discoverUnityProjects, isUnityProject } from "../src/discovery.js";
+import { discoverUnityProjects, isUnityProject, ensureDbDir } from "../src/discovery.js";
 
 const TMP = join(import.meta.dirname, "tmp-discovery");
 
@@ -95,5 +95,23 @@ describe("discoverUnityProjects", () => {
     makeUnityProject(a);
     const result = discoverUnityProjects(TMP);
     expect(result).toEqual([a, z]);
+  });
+});
+
+describe("ensureDbDir", () => {
+  it("creates .unity-indexer dir with .gitignore and returns db path", () => {
+    makeUnityProject(TMP);
+    const dbPath = ensureDbDir(TMP);
+    expect(dbPath).toBe(join(TMP, ".unity-indexer", "index.db"));
+    expect(existsSync(join(TMP, ".unity-indexer"))).toBe(true);
+    const gitignore = readFileSync(join(TMP, ".unity-indexer", ".gitignore"), "utf8");
+    expect(gitignore).toBe("*\n");
+  });
+
+  it("is idempotent", () => {
+    makeUnityProject(TMP);
+    ensureDbDir(TMP);
+    const dbPath = ensureDbDir(TMP);
+    expect(dbPath).toBe(join(TMP, ".unity-indexer", "index.db"));
   });
 });
