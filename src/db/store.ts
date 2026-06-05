@@ -1,4 +1,4 @@
-import Database, { type Database as DatabaseType } from "better-sqlite3";
+import Database, { type Database as DatabaseType, type Statement } from "better-sqlite3";
 import { SCHEMA_SQL } from "./schema.js";
 import type {
   FileRow,
@@ -90,9 +90,9 @@ function memberRowOut(row: Record<string, unknown>): ScriptMemberRow & { id: num
 
 export class Store {
   private db: DatabaseType;
-  private stmtCache = new Map<string, ReturnType<DatabaseType["prepare"]>>();
+  private stmtCache = new Map<string, Statement>();
 
-  private prepare(sql: string): ReturnType<DatabaseType["prepare"]> {
+  private prepare(sql: string): Statement {
     let stmt = this.stmtCache.get(sql);
     if (!stmt) {
       stmt = this.db.prepare(sql);
@@ -425,9 +425,9 @@ export class Store {
   }
 
   getScriptByClassName(className: string): (ScriptRow & { id: number }) | undefined {
-    const row = this.db
-      .prepare("SELECT * FROM scripts WHERE class_name = ? LIMIT 1")
-      .get(className) as Record<string, unknown> | undefined;
+    const row = this.prepare("SELECT * FROM scripts WHERE class_name = ? LIMIT 1").get(
+      className,
+    ) as Record<string, unknown> | undefined;
     return row ? scriptRowOut(row) : undefined;
   }
 
