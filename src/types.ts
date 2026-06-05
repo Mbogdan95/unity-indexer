@@ -351,3 +351,47 @@ export interface ProjectSummaryRow {
   description: string;
   indexed_at: string;
 }
+
+export type GraphNodeType = "file" | "script" | "game_object" | "component" | "assembly";
+
+export type GraphEdgeType =
+  | "INHERITS"
+  | "IMPLEMENTS"
+  | "ATTACHES_TO"
+  | "SCRIPTED_BY"
+  | "CHILD_OF"
+  | "DEFINED_IN"
+  | "REFERENCES_GUID"
+  | "VARIANT_OF"
+  | "BELONGS_TO"
+  | "CALLS"
+  | "SUBSCRIBES_TO"
+  | "ASSEMBLY_DEPENDS";
+
+export interface GraphEdgeRow {
+  id?: number;
+  source_type: GraphNodeType;
+  source_id: number;
+  target_type: GraphNodeType;
+  target_id: number;
+  edge_type: GraphEdgeType;
+  metadata: string | null;
+  source_file_id: number | null;
+}
+
+export interface GraphNodeId {
+  type: GraphNodeType;
+  id: number;
+}
+
+export function encodeNodeId(type: GraphNodeType, id: number): string {
+  return `${type}:${String(id)}`;
+}
+
+export function decodeNodeId(encoded: string): GraphNodeId {
+  const sep = encoded.indexOf(":");
+  return {
+    type: encoded.slice(0, sep) as GraphNodeType,
+    id: Number(encoded.slice(sep + 1)),
+  };
+}
