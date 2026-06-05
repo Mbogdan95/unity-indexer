@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { resolveSettingsPath } from "../../src/cli/settings.js";
+import { resolveSettingsPath, installServer } from "../../src/cli/settings.js";
 import { join } from "path";
-import { homedir } from "os";
+import { homedir, tmpdir } from "os";
+import { mkdtempSync, readFileSync, writeFileSync } from "fs";
 
 describe("resolveSettingsPath", () => {
   it("resolves global scope to ~/.claude/settings.json", () => {
@@ -27,5 +28,70 @@ describe("resolveSettingsPath", () => {
   it("uses process.cwd() for project scope when no cwd provided", () => {
     const result = resolveSettingsPath("project");
     expect(result).toBe(join(process.cwd(), ".claude", "settings.json"));
+  });
+});
+
+describe("installServer", () => {
+  function makeTempDir(): string {
+    return mkdtempSync(join(tmpdir(), "unity-indexer-test-"));
+  }
+
+  it("creates settings file when it does not exist", () => {
+    const dir = makeTempDir();
+    const filePath = join(dir, ".claude", "settings.json");
+    installServer(filePath);
+    const content = JSON.parse(readFileSync(filePath, "utf-8"));
+    expect(content.mcpServers["unity-indexer"]).toEqual({
+      command: "npx",
+      args: ["-y", "unity-indexer"],
+    });
+  });
+
+  it("preserves existing mcpServers entries", () => {
+    const dir = makeTempDir();
+    const filePath = join(dir, "settings.json");
+    writeFileSync(
+      filePath,
+      JSON.stringify({ mcpServers: { "other-server": { command: "other", args: [] } } }),
+    );
+    installServer(filePath);
+    const content = JSON.parse(readFileSync(filePath, "utf-8"));
+    expect(content.mcpServers["other-server"]).toEqual({ command: "other", args: [] });
+    expect(content.mcpServers["unity-indexer"]).toEqual({
+      command: "npx",
+      args: ["-y", "unity-indexer"],
+    });
+  });
+
+  it("preserves non-mcpServers settings", () => {
+    const dir = makeTempDir();
+    const filePath = join(dir, "settings.json");
+    writeFileSync(filePath, JSON.stringify({ permissions: { allow: ["Bash(ls)"] } }));
+    installServer(filePath);
+    const content = JSON.parse(readFileSync(filePath, "utf-8"));
+    expect(content.permissions).toEqual({ allow: ["Bash(ls)"] });
+  });
+
+  it("overwrites existing unity-indexer entry (idempotent)", () => {
+    const dir = makeTempDir();
+    const filePath = join(dir, "settings.json");
+    writeFileSync(
+      filePath,
+      JSON.stringify({ mcpServers: { "unity-indexer": { command: "old", args: ["old"] } } }),
+    );
+    installServer(filePath);
+    const content = JSON.parse(readFileSync(filePath, "utf-8"));
+    expect(content.mcpServers["unity-indexer"]).toEqual({
+      command: "npx",
+      args: ["-y", "unity-indexer"],
+    });
+  });
+
+  it("creates parent directories when they do not exist", () => {
+    const dir = makeTempDir();
+    const filePath = join(dir, "nested", "deep", "settings.json");
+    installServer(filePath);
+    const content = JSON.parse(readFileSync(filePath, "utf-8"));
+    expect(content.mcpServers["unity-indexer"]).toBeDefined();
   });
 });
