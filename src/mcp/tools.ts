@@ -263,14 +263,16 @@ export function handleGetScriptMember(
     };
   }
 
+  const params_parsed = JSON.parse(member.parameters) as unknown;
+  const attrs = JSON.parse(member.attributes) as string[];
   const response = {
     class_name: script.class_name,
     name: member.name,
     kind: member.kind,
     access: member.access,
     return_type: member.return_type,
-    parameters: JSON.parse(member.parameters) as unknown,
-    attributes: JSON.parse(member.attributes) as string[],
+    parameters: params_parsed,
+    ...(attrs.length > 0 ? { attributes: attrs } : {}),
     signature: member.signature,
     has_serialize_field: member.has_serialize_field,
     has_header_attr: member.has_header_attr,
