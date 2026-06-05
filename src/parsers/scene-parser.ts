@@ -27,7 +27,6 @@ export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
   // Build Transform → GameObject mapping
   // Transform docs (classId === 4) have m_GameObject back-ref
   const transformToGo = new Map<string, string>(); // transformFileId → goFileId
-  const goToTransform = new Map<string, string>(); // goFileId → transformFileId
   for (const doc of docs) {
     if (doc.classId === 4) {
       const data =
@@ -45,7 +44,6 @@ export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
               : "";
         if (goFileId !== "" && goFileId !== "0") {
           transformToGo.set(doc.fileId, goFileId);
-          goToTransform.set(goFileId, doc.fileId);
         }
       }
     }
