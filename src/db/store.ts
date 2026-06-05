@@ -90,6 +90,16 @@ function memberRowOut(row: Record<string, unknown>): ScriptMemberRow & { id: num
 
 export class Store {
   private db: DatabaseType;
+  private stmtCache = new Map<string, ReturnType<DatabaseType["prepare"]>>();
+
+  private prepare(sql: string): ReturnType<DatabaseType["prepare"]> {
+    let stmt = this.stmtCache.get(sql);
+    if (!stmt) {
+      stmt = this.db.prepare(sql);
+      this.stmtCache.set(sql, stmt);
+    }
+    return stmt;
+  }
 
   constructor(dbPath: string) {
     this.db = new Database(dbPath);
@@ -107,7 +117,7 @@ export class Store {
   // ---------------------------------------------------------------------------
 
   upsertFile(file: FileRow): number {
-    const stmt = this.db.prepare(`
+    const stmt = this.prepare(`
       INSERT INTO files (path, type, content_hash, modified_at, indexed_at, summary_line, importance_score, status, source_prefab_guid)
       VALUES (@path, @type, @content_hash, @modified_at, @indexed_at, @summary_line, @importance_score, @status, @source_prefab_guid)
       ON CONFLICT(path) DO UPDATE SET
@@ -136,14 +146,14 @@ export class Store {
   }
 
   getFileByPath(path: string): (FileRow & { id: number }) | undefined {
-    const row = this.db.prepare("SELECT * FROM files WHERE path = ?").get(path) as
+    const row = this.prepare("SELECT * FROM files WHERE path = ?").get(path) as
       | Record<string, unknown>
       | undefined;
     return row ? fileRowOut(row) : undefined;
   }
 
   getFileById(id: number): (FileRow & { id: number }) | undefined {
-    const row = this.db.prepare("SELECT * FROM files WHERE id = ?").get(id) as
+    const row = this.prepare("SELECT * FROM files WHERE id = ?").get(id) as
       | Record<string, unknown>
       | undefined;
     return row ? fileRowOut(row) : undefined;
@@ -155,7 +165,7 @@ export class Store {
         ? (this.db
             .prepare("SELECT * FROM files WHERE type = ? ORDER BY importance_score DESC")
             .all(type) as Record<string, unknown>[])
-        : (this.db.prepare("SELECT * FROM files ORDER BY importance_score DESC").all() as Record<
+        : (this.prepare("SELECT * FROM files ORDER BY importance_score DESC").all() as Record<
             string,
             unknown
           >[]);
@@ -163,7 +173,7 @@ export class Store {
   }
 
   deleteFile(fileId: number): void {
-    this.db.prepare("DELETE FROM files WHERE id = ?").run(fileId);
+    this.prepare("DELETE FROM files WHERE id = ?").run(fileId);
   }
 
   // ---------------------------------------------------------------------------
@@ -171,7 +181,7 @@ export class Store {
   // ---------------------------------------------------------------------------
 
   insertGameObject(go: GameObjectRow): number {
-    const stmt = this.db.prepare(`
+    const stmt = this.prepare(`
       INSERT INTO game_objects
         (file_id, file_id_local, name, parent_file_id_local, depth, sibling_index, active, layer, tag,
          component_summary, subtree_summary, is_leaf, child_count, subtree_depth, importance_score)
@@ -207,7 +217,7 @@ export class Store {
   }
 
   getGameObjectById(id: number): (GameObjectRow & { id: number }) | undefined {
-    const row = this.db.prepare("SELECT * FROM game_objects WHERE id = ?").get(id) as
+    const row = this.prepare("SELECT * FROM game_objects WHERE id = ?").get(id) as
       | Record<string, unknown>
       | undefined;
     return row ? goRowOut(row) : undefined;
@@ -264,7 +274,7 @@ export class Store {
   // ---------------------------------------------------------------------------
 
   insertComponent(comp: ComponentRow): number {
-    const stmt = this.db.prepare(`
+    const stmt = this.prepare(`
       INSERT INTO components
         (game_object_id, type_name, script_guid, "order", serialized_fields, field_summary, pattern_hash)
       VALUES
@@ -336,7 +346,7 @@ export class Store {
              WHERE c.type_name = ? AND g.file_id = ?`,
             )
             .all(typeName, fileId) as Record<string, unknown>[])
-        : (this.db.prepare("SELECT * FROM components WHERE type_name = ?").all(typeName) as Record<
+        : (this.prepare("SELECT * FROM components WHERE type_name = ?").all(typeName) as Record<
             string,
             unknown
           >[]);
@@ -357,7 +367,7 @@ export class Store {
   // ---------------------------------------------------------------------------
 
   insertScript(script: ScriptRow): number {
-    const stmt = this.db.prepare(`
+    const stmt = this.prepare(`
       INSERT INTO scripts
         (file_id, class_name, namespace, base_class, interfaces, assembly_name, api_summary,
          complexity_score, is_monobehaviour, is_editor_script, is_scriptable_object, is_generated)
@@ -410,7 +420,7 @@ export class Store {
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const sql = `SELECT * FROM scripts ${where} ORDER BY class_name`;
-    const rows = this.db.prepare(sql).all(...params) as Record<string, unknown>[];
+    const rows = this.prepare(sql).all(...params) as Record<string, unknown>[];
     return rows.map(scriptRowOut);
   }
 
@@ -426,7 +436,7 @@ export class Store {
   // ---------------------------------------------------------------------------
 
   insertScriptMember(member: ScriptMemberRow): number {
-    const stmt = this.db.prepare(`
+    const stmt = this.prepare(`
       INSERT INTO script_members
         (script_id, name, kind, access, return_type, parameters, attributes, signature,
          has_serialize_field, has_header_attr)
@@ -479,14 +489,14 @@ export class Store {
   }
 
   resolveGuid(guid: string): GuidRow | undefined {
-    const row = this.db.prepare("SELECT * FROM guids WHERE guid = ?").get(guid) as
+    const row = this.prepare("SELECT * FROM guids WHERE guid = ?").get(guid) as
       | GuidRow
       | undefined;
     return row;
   }
 
   getGuidByFileId(fileId: number): GuidRow | undefined {
-    const row = this.db.prepare("SELECT * FROM guids WHERE file_id = ?").get(fileId) as
+    const row = this.prepare("SELECT * FROM guids WHERE file_id = ?").get(fileId) as
       | GuidRow
       | undefined;
     return row;
@@ -548,7 +558,7 @@ export class Store {
   // ---------------------------------------------------------------------------
 
   listAssemblies(): (AssemblyRow & { id: number })[] {
-    const rows = this.db.prepare("SELECT * FROM assemblies ORDER BY name").all() as Record<
+    const rows = this.prepare("SELECT * FROM assemblies ORDER BY name").all() as Record<
       string,
       unknown
     >[];
@@ -564,7 +574,7 @@ export class Store {
   }
 
   insertAssembly(asm: AssemblyRow): number {
-    const stmt = this.db.prepare(`
+    const stmt = this.prepare(`
       INSERT INTO assemblies
         (file_id, name, "references", defines, platforms, dependency_summary)
       VALUES
@@ -626,7 +636,7 @@ export class Store {
   // ---------------------------------------------------------------------------
 
   getProjectSummary(): ProjectSummaryRow {
-    const row = this.db.prepare("SELECT * FROM project_summary WHERE id = 1").get() as Record<
+    const row = this.prepare("SELECT * FROM project_summary WHERE id = 1").get() as Record<
       string,
       unknown
     >;
@@ -648,7 +658,7 @@ export class Store {
     const fields = Object.keys(partial) as (keyof typeof partial)[];
     if (fields.length === 0) return;
     const sets = fields.map((f) => `${f} = @${f}`).join(", ");
-    this.db.prepare(`UPDATE project_summary SET ${sets} WHERE id = 1`).run(partial);
+    this.prepare(`UPDATE project_summary SET ${sets} WHERE id = 1`).run(partial);
   }
 
   // ---------------------------------------------------------------------------
@@ -706,7 +716,7 @@ export class Store {
         )
         .run(fileId);
 
-      this.db.prepare("DELETE FROM game_objects WHERE file_id = ?").run(fileId);
+      this.prepare("DELETE FROM game_objects WHERE file_id = ?").run(fileId);
 
       // Remove script members tied to scripts of this file
       this.db
@@ -716,10 +726,10 @@ export class Store {
         )
         .run(fileId);
 
-      this.db.prepare("DELETE FROM scripts WHERE file_id = ?").run(fileId);
-      this.db.prepare('DELETE FROM "references" WHERE source_file_id = ?').run(fileId);
-      this.db.prepare("DELETE FROM guids WHERE file_id = ?").run(fileId);
-      this.db.prepare("DELETE FROM assemblies WHERE file_id = ?").run(fileId);
+      this.prepare("DELETE FROM scripts WHERE file_id = ?").run(fileId);
+      this.prepare('DELETE FROM "references" WHERE source_file_id = ?').run(fileId);
+      this.prepare("DELETE FROM guids WHERE file_id = ?").run(fileId);
+      this.prepare("DELETE FROM assemblies WHERE file_id = ?").run(fileId);
     })();
   }
 

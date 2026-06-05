@@ -101,6 +101,9 @@ CREATE INDEX IF NOT EXISTS idx_scripts_base_class
 CREATE INDEX IF NOT EXISTS idx_scripts_assembly_name
   ON scripts (assembly_name);
 
+CREATE INDEX IF NOT EXISTS idx_scripts_file_id
+  ON scripts (file_id);
+
 CREATE TABLE IF NOT EXISTS script_members (
   id                  INTEGER PRIMARY KEY AUTOINCREMENT,
   script_id           INTEGER NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
@@ -123,6 +126,9 @@ CREATE TABLE IF NOT EXISTS guids (
   file_id     INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
   asset_type  TEXT NOT NULL DEFAULT ''
 );
+
+CREATE INDEX IF NOT EXISTS idx_guids_file_id
+  ON guids (file_id);
 
 CREATE TABLE IF NOT EXISTS "references" (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
