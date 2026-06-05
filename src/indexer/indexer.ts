@@ -478,7 +478,6 @@ export class Indexer {
     gameObjects: ParsedGameObject[],
     guidToClass: Map<string, string>,
   ): void {
-    // Build child map: parentFileIdLocal → children
     const childMap = new Map<string, ParsedGameObject[]>();
     const roots: ParsedGameObject[] = [];
 
@@ -492,55 +491,24 @@ export class Indexer {
       }
     }
 
-    // Compute depth recursively
-    const depthMap = new Map<string, number>();
+    const siblingCounters = new Map<string, number>();
 
-    const computeDepth = (fileIdLocal: string, depth: number) => {
-      depthMap.set(fileIdLocal, depth);
-      const children = childMap.get(fileIdLocal) ?? [];
-      for (const child of children) {
-        computeDepth(child.fileIdLocal, depth + 1);
-      }
-    };
-
-    for (const root of roots) {
-      computeDepth(root.fileIdLocal, 0);
-    }
-
-    // Compute subtree depth recursively
-    const subtreeDepthMap = new Map<string, number>();
-    const computeSubtreeDepth = (fileIdLocal: string): number => {
-      const children = childMap.get(fileIdLocal) ?? [];
-      if (children.length === 0) {
-        subtreeDepthMap.set(fileIdLocal, 0);
-        return 0;
-      }
-      const maxChildDepth = Math.max(...children.map((c) => computeSubtreeDepth(c.fileIdLocal)));
-      const depth = maxChildDepth + 1;
-      subtreeDepthMap.set(fileIdLocal, depth);
-      return depth;
-    };
-
-    for (const go of gameObjects) {
-      if (!subtreeDepthMap.has(go.fileIdLocal)) {
-        computeSubtreeDepth(go.fileIdLocal);
-      }
-    }
-
-    // Insert game objects in topological order (parents before children)
-    const siblingIndex = new Map<string, number>();
-
-    const insertGo = (go: ParsedGameObject) => {
-      const depth = depthMap.get(go.fileIdLocal) ?? 0;
-      const parentKey = go.parentFileIdLocal ?? "__root__";
-      const idx = siblingIndex.get(parentKey) ?? 0;
-      siblingIndex.set(parentKey, idx + 1);
-
+    const insertRecursive = (go: ParsedGameObject, depth: number): number => {
       const children = childMap.get(go.fileIdLocal) ?? [];
-      const childNames = children.map((c) => c.name);
-      const subtreeDepth = subtreeDepthMap.get(go.fileIdLocal) ?? 0;
-      const isLeaf = children.length === 0;
+      const parentKey = go.parentFileIdLocal ?? "__root__";
+      const idx = siblingCounters.get(parentKey) ?? 0;
+      siblingCounters.set(parentKey, idx + 1);
 
+      // Recurse first to compute subtree depth
+      let maxChildSubtreeDepth = -1;
+      for (const child of children) {
+        const childSubtreeDepth = insertRecursive(child, depth + 1);
+        if (childSubtreeDepth > maxChildSubtreeDepth) maxChildSubtreeDepth = childSubtreeDepth;
+      }
+      const subtreeDepth = children.length === 0 ? 0 : maxChildSubtreeDepth + 1;
+
+      const childNames = children.map((c) => c.name);
+      const isLeaf = children.length === 0;
       const componentSummary = generateComponentSummary(go.components, guidToClass);
       const subtreeSummary = generateSubtreeSummary(go.name, childNames);
       const hasMonoBehaviour = go.components.some((c) => c.typeName === "MonoBehaviour");
@@ -570,7 +538,6 @@ export class Indexer {
         importance_score: importance,
       });
 
-      // Insert components
       for (const comp of go.components) {
         const fieldSummary = generateFieldSummary(comp.serializedFields, guidToClass);
         const patternHash = createHash("md5")
@@ -588,14 +555,11 @@ export class Indexer {
         });
       }
 
-      // Recurse into children
-      for (const child of children) {
-        insertGo(child);
-      }
+      return subtreeDepth;
     };
 
     for (const root of roots) {
-      insertGo(root);
+      insertRecursive(root, 0);
     }
   }
 
