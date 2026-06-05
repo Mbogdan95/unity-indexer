@@ -203,6 +203,20 @@ describe("Store - scripts", () => {
     expect(mbs[0].class_name).toBe("MyMB");
   });
 
+  it("finds a script by file_id", () => {
+    const fileId = store.upsertFile(makeFile({ path: "Assets/Scripts/Test.cs", type: "script" }));
+    store.insertScript(makeScript(fileId, { class_name: "TestClass" }));
+
+    const found = store.getScriptByFileId(fileId);
+    expect(found).toBeDefined();
+    expect(found!.class_name).toBe("TestClass");
+  });
+
+  it("returns undefined when no script for file_id", () => {
+    const fileId = store.upsertFile(makeFile({ path: "Assets/Scenes/X.unity", type: "scene" }));
+    expect(store.getScriptByFileId(fileId)).toBeUndefined();
+  });
+
   it("inserts and retrieves script members", () => {
     const fileId = store.upsertFile(makeFile({ path: "p.cs", type: "script" }));
     const scriptId = store.insertScript(makeScript(fileId));
@@ -263,6 +277,63 @@ describe("Store - guids", () => {
     const found = store.getGuidByFileId(fileId);
     expect(found).toBeDefined();
     expect(found!.guid).toBe("xyz");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("getGuidToClassMap", () => {
+  it("maps script GUID to class name for MonoBehaviours", () => {
+    const scriptFileId = store.upsertFile(
+      makeFile({ path: "Assets/Scripts/Foo.cs", type: "script" }),
+    );
+    const metaFileId = store.upsertFile(
+      makeFile({ path: "Assets/Scripts/Foo.cs.meta", type: "meta" }),
+    );
+    store.upsertGuid({ guid: "abc123guid", file_id: metaFileId, asset_type: "script" });
+    store.insertScript({
+      file_id: scriptFileId,
+      class_name: "Foo",
+      namespace: "",
+      base_class: "MonoBehaviour",
+      interfaces: "[]",
+      assembly_name: "",
+      api_summary: "",
+      complexity_score: 1,
+      is_monobehaviour: true,
+      is_editor_script: false,
+      is_scriptable_object: false,
+      is_generated: false,
+    });
+
+    const map = store.getGuidToClassMap();
+    expect(map.get("abc123guid")).toBe("Foo");
+  });
+
+  it("excludes non-MonoBehaviour scripts", () => {
+    const scriptFileId = store.upsertFile(
+      makeFile({ path: "Assets/Scripts/Bar.cs", type: "script" }),
+    );
+    const metaFileId = store.upsertFile(
+      makeFile({ path: "Assets/Scripts/Bar.cs.meta", type: "meta" }),
+    );
+    store.upsertGuid({ guid: "bar123guid", file_id: metaFileId, asset_type: "script" });
+    store.insertScript({
+      file_id: scriptFileId,
+      class_name: "Bar",
+      namespace: "",
+      base_class: "",
+      interfaces: "[]",
+      assembly_name: "",
+      api_summary: "",
+      complexity_score: 1,
+      is_monobehaviour: false,
+      is_editor_script: false,
+      is_scriptable_object: false,
+      is_generated: false,
+    });
+
+    const map = store.getGuidToClassMap();
+    expect(map.has("bar123guid")).toBe(false);
   });
 });
 

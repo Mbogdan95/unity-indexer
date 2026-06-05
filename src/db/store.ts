@@ -431,6 +431,13 @@ export class Store {
     return row ? scriptRowOut(row) : undefined;
   }
 
+  getScriptByFileId(fileId: number): (ScriptRow & { id: number }) | undefined {
+    const row = this.prepare("SELECT * FROM scripts WHERE file_id = ? LIMIT 1").get(fileId) as
+      | Record<string, unknown>
+      | undefined;
+    return row ? scriptRowOut(row) : undefined;
+  }
+
   // ---------------------------------------------------------------------------
   // Script Members
   // ---------------------------------------------------------------------------
@@ -498,6 +505,25 @@ export class Store {
       | GuidRow
       | undefined;
     return row;
+  }
+
+  getGuidToClassMap(): Map<string, string> {
+    const rows = this.prepare(
+      `
+      SELECT s.class_name, g.guid
+      FROM scripts s
+      JOIN files f ON s.file_id = f.id
+      JOIN files mf ON mf.path = f.path || '.meta'
+      JOIN guids g ON g.file_id = mf.id
+      WHERE s.is_monobehaviour = 1
+    `,
+    ).all() as { class_name: string; guid: string }[];
+
+    const map = new Map<string, string>();
+    for (const row of rows) {
+      map.set(row.guid, row.class_name);
+    }
+    return map;
   }
 
   // ---------------------------------------------------------------------------

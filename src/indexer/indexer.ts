@@ -595,27 +595,7 @@ export class Indexer {
   // ---------------------------------------------------------------------------
 
   private buildGuidToClassMap(): Map<string, string> {
-    const map = new Map<string, string>();
-    const scripts = this.store.listScripts();
-
-    for (const script of scripts) {
-      // Find the file for this script
-      const fileRow = this.store.getFileById(script.file_id);
-      if (!fileRow) continue;
-
-      // Find the .meta file for this script file
-      const metaPath = fileRow.path + ".meta";
-      const metaFile = this.store.getFileByPath(metaPath);
-      if (!metaFile) continue;
-
-      // Get the GUID registered for this .meta file
-      const guidRow = this.store.getGuidByFileId(metaFile.id);
-      if (!guidRow) continue;
-
-      map.set(guidRow.guid, script.class_name);
-    }
-
-    return map;
+    return this.store.getGuidToClassMap();
   }
 
   private updateProjectSummary(): void {
@@ -644,7 +624,7 @@ export class Indexer {
         const assetPath = file.path.endsWith(".meta") ? file.path.slice(0, -5) : file.path;
         const assetFile = this.store.getFileByPath(assetPath);
         if (assetFile?.type === "script") {
-          const script = this.store.listScripts().find((s) => s.file_id === assetFile.id);
+          const script = this.store.getScriptByFileId(assetFile.id);
           if (script) hotScripts.push(script.class_name);
         }
       }
