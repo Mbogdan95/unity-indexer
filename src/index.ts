@@ -8,7 +8,13 @@ import { resolveSettingsPath, installServer, uninstallServer } from "./cli/setti
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
 const version = (JSON.parse(readFileSync(pkgPath, "utf-8")) as { version: string }).version;
 
-const action = parseArgs(process.argv.slice(2));
+let action;
+try {
+  action = parseArgs(process.argv.slice(2));
+} catch (err) {
+  console.error(String(err instanceof Error ? err.message : err));
+  process.exit(1);
+}
 
 switch (action.kind) {
   case "help": {
