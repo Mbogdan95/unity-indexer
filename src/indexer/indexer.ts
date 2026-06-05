@@ -199,19 +199,19 @@ export class Indexer {
           this.indexMeta(fileId, content);
           break;
         case "scene":
-          this.indexScene(fileId, relativePath, content);
+          this.indexScene(fileId, relativePath, content, contentHash);
           break;
         case "prefab":
-          this.indexPrefab(fileId, relativePath, content);
+          this.indexPrefab(fileId, relativePath, content, contentHash);
           break;
         case "asset":
-          this.indexAssetFile(fileId, relativePath, content);
+          this.indexAssetFile(fileId, relativePath, content, contentHash);
           break;
         case "script":
-          this.indexScript(fileId, relativePath, content);
+          this.indexScript(fileId, relativePath, content, contentHash);
           break;
         case "asmdef":
-          this.indexAsmDef(fileId, relativePath, content);
+          this.indexAsmDef(fileId, relativePath, content, contentHash);
           break;
       }
 
@@ -249,9 +249,14 @@ export class Indexer {
     });
   }
 
-  private indexScene(fileId: number, relativePath: string, content: string): void {
+  private indexScene(
+    fileId: number,
+    relativePath: string,
+    content: string,
+    contentHash: string,
+  ): void {
     const parsed = parseScene(content);
-    const guidToClass = this.guidToClassCache ?? this.buildGuidToClassMap();
+    const guidToClass = (this.guidToClassCache ??= this.buildGuidToClassMap());
 
     this.storeGameObjects(fileId, parsed.gameObjects, guidToClass);
     this.storeReferences(fileId, parsed.references);
@@ -275,7 +280,7 @@ export class Indexer {
     this.store.upsertFile({
       path: relativePath,
       type: "scene",
-      content_hash: createHash("sha256").update(content).digest("hex"),
+      content_hash: contentHash,
       modified_at: this.getModifiedTime(join(this.projectRoot, relativePath)),
       indexed_at: new Date().toISOString(),
       summary_line: summaryLine,
@@ -284,9 +289,14 @@ export class Indexer {
     });
   }
 
-  private indexPrefab(fileId: number, relativePath: string, content: string): void {
+  private indexPrefab(
+    fileId: number,
+    relativePath: string,
+    content: string,
+    contentHash: string,
+  ): void {
     const parsed = parsePrefab(content);
-    const guidToClass = this.guidToClassCache ?? this.buildGuidToClassMap();
+    const guidToClass = (this.guidToClassCache ??= this.buildGuidToClassMap());
 
     this.storeGameObjects(fileId, parsed.gameObjects, guidToClass);
     this.storeReferences(fileId, parsed.references);
@@ -309,7 +319,7 @@ export class Indexer {
     this.store.upsertFile({
       path: relativePath,
       type: "prefab",
-      content_hash: createHash("sha256").update(content).digest("hex"),
+      content_hash: contentHash,
       modified_at: this.getModifiedTime(join(this.projectRoot, relativePath)),
       indexed_at: new Date().toISOString(),
       summary_line: summaryLine,
@@ -319,7 +329,12 @@ export class Indexer {
     });
   }
 
-  private indexAssetFile(fileId: number, relativePath: string, content: string): void {
+  private indexAssetFile(
+    fileId: number,
+    relativePath: string,
+    content: string,
+    contentHash: string,
+  ): void {
     const parsed = parseAsset(content);
     this.storeReferences(fileId, parsed.references);
 
@@ -331,7 +346,7 @@ export class Indexer {
     this.store.upsertFile({
       path: relativePath,
       type: "asset",
-      content_hash: createHash("sha256").update(content).digest("hex"),
+      content_hash: contentHash,
       modified_at: this.getModifiedTime(join(this.projectRoot, relativePath)),
       indexed_at: new Date().toISOString(),
       summary_line: summaryLine,
@@ -340,7 +355,12 @@ export class Indexer {
     });
   }
 
-  private indexScript(fileId: number, relativePath: string, content: string): void {
+  private indexScript(
+    fileId: number,
+    relativePath: string,
+    content: string,
+    contentHash: string,
+  ): void {
     const scripts = parseScript(content);
     const fileName = basename(relativePath);
 
@@ -403,7 +423,7 @@ export class Indexer {
     this.store.upsertFile({
       path: relativePath,
       type: "script",
-      content_hash: createHash("sha256").update(content).digest("hex"),
+      content_hash: contentHash,
       modified_at: this.getModifiedTime(join(this.projectRoot, relativePath)),
       indexed_at: new Date().toISOString(),
       summary_line: primarySummaryLine,
@@ -412,7 +432,12 @@ export class Indexer {
     });
   }
 
-  private indexAsmDef(fileId: number, relativePath: string, content: string): void {
+  private indexAsmDef(
+    fileId: number,
+    relativePath: string,
+    content: string,
+    contentHash: string,
+  ): void {
     const parsed = parseAsmDef(content);
 
     const depSummary =
@@ -435,7 +460,7 @@ export class Indexer {
     this.store.upsertFile({
       path: relativePath,
       type: "asmdef",
-      content_hash: createHash("sha256").update(content).digest("hex"),
+      content_hash: contentHash,
       modified_at: this.getModifiedTime(join(this.projectRoot, relativePath)),
       indexed_at: new Date().toISOString(),
       summary_line: summaryLine,
