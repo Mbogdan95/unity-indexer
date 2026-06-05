@@ -16,14 +16,14 @@ async function run() {
   const dbPath = join(tmpDir, "bench.db");
 
   try {
-    await Promise.resolve(generateFixture(fixtureDir, preset));
+    generateFixture(fixtureDir, preset);
     await initScriptParser();
 
     const bench = new Benchmark();
     bench.start();
 
     const store = new Store(dbPath);
-    const indexer = new Indexer(store, fixtureDir);
+    const indexer = new Indexer(store, fixtureDir, bench);
 
     indexer.indexAll();
 

@@ -8,6 +8,7 @@ import { parseAsset } from "../parsers/asset-parser.js";
 import { parseScript } from "../parsers/script-parser.js";
 import { parseMeta } from "../parsers/meta-parser.js";
 import { parseAsmDef } from "../parsers/asmdef-parser.js";
+import type { Benchmark } from "../benchmark.js";
 import {
   generateComponentSummary,
   generateSubtreeSummary,
@@ -31,6 +32,7 @@ export class Indexer {
   constructor(
     private store: Store,
     private projectRoot: string,
+    private benchmark?: Benchmark,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -44,9 +46,13 @@ export class Indexer {
     const metaFiles = files.filter((f) => f.endsWith(".meta"));
     const otherFiles = files.filter((f) => !f.endsWith(".meta"));
 
+    let endPhase: (() => void) | undefined;
+
     // Index meta files first in batches (GUID registry needed by other parsers)
     log(`indexing ${String(metaFiles.length)} meta files...`);
+    endPhase = this.benchmark?.startPhase("meta");
     this.indexBatch(metaFiles);
+    endPhase?.();
 
     // Index scripts before scenes/prefabs so guidToClassMap is populated
     const scripts = otherFiles.filter((f) => f.endsWith(".cs"));
@@ -58,31 +64,46 @@ export class Indexer {
 
     if (scripts.length > 0) {
       log(`indexing ${String(scripts.length)} script files...`);
+      endPhase = this.benchmark?.startPhase("scripts");
       this.indexBatch(scripts);
+      endPhase?.();
     }
     if (asmdefs.length > 0) {
       log(`indexing ${String(asmdefs.length)} asmdef files...`);
+      endPhase = this.benchmark?.startPhase("asmdefs");
       this.indexBatch(asmdefs);
+      endPhase?.();
     }
     if (assets.length > 0) {
       log(`indexing ${String(assets.length)} asset files...`);
+      endPhase = this.benchmark?.startPhase("assets");
       this.indexBatch(assets);
+      endPhase?.();
     }
 
     // Build guid→class map once now that all scripts + metas are indexed
     log("building GUID → class map...");
+    endPhase = this.benchmark?.startPhase("guid_map");
     this.guidToClassCache = this.buildGuidToClassMap();
+    endPhase?.();
 
     if (scenesAndPrefabs.length > 0) {
       log(`indexing ${String(scenesAndPrefabs.length)} scene/prefab files...`);
+      endPhase = this.benchmark?.startPhase("scenes_prefabs");
       this.indexBatch(scenesAndPrefabs);
+      endPhase?.();
     }
 
     this.guidToClassCache = null;
 
     log("recomputing reference counts...");
+    endPhase = this.benchmark?.startPhase("ref_counts");
     this.store.recomputeReferenceCounts();
+    endPhase?.();
+
+    endPhase = this.benchmark?.startPhase("summary");
     this.updateProjectSummary();
+    endPhase?.();
   }
 
   private indexBatch(files: string[], batchSize = 500): void {
