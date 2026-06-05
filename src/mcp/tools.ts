@@ -498,7 +498,7 @@ export function handleRecentChanges(
 
 export function registerTools(server: McpServer, resolveStore: StoreResolver): void {
   const toContent = (obj: object) => ({
-    content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
+    content: [{ type: "text" as const, text: JSON.stringify(obj) }],
   });
 
   server.registerTool(
