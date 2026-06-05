@@ -489,9 +489,7 @@ export class Store {
   }
 
   resolveGuid(guid: string): GuidRow | undefined {
-    const row = this.prepare("SELECT * FROM guids WHERE guid = ?").get(guid) as
-      | GuidRow
-      | undefined;
+    const row = this.prepare("SELECT * FROM guids WHERE guid = ?").get(guid) as GuidRow | undefined;
     return row;
   }
 
