@@ -58,3 +58,18 @@ export function installServer(filePath: string): void {
   settings.mcpServers["unity-indexer"] = UNITY_INDEXER_ENTRY;
   writeSettings(filePath, settings);
 }
+
+export function uninstallServer(filePath: string): void {
+  if (!existsSync(filePath)) {
+    throw new Error(`Settings file not found: ${filePath}`);
+  }
+  const settings = readSettings(filePath);
+  if (
+    settings.mcpServers === undefined ||
+    !Object.prototype.hasOwnProperty.call(settings.mcpServers, "unity-indexer")
+  ) {
+    throw new Error("unity-indexer is not registered in this settings file");
+  }
+  delete settings.mcpServers["unity-indexer"];
+  writeSettings(filePath, settings);
+}

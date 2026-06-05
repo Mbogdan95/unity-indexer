@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveSettingsPath, installServer } from "../../src/cli/settings.js";
+import { resolveSettingsPath, installServer, uninstallServer } from "../../src/cli/settings.js";
 import { join } from "path";
 import { homedir, tmpdir } from "os";
 import { mkdtempSync, readFileSync, writeFileSync } from "fs";
@@ -93,5 +93,73 @@ describe("installServer", () => {
     installServer(filePath);
     const content = JSON.parse(readFileSync(filePath, "utf-8"));
     expect(content.mcpServers["unity-indexer"]).toBeDefined();
+  });
+});
+
+describe("uninstallServer", () => {
+  function makeTempDir(): string {
+    return mkdtempSync(join(tmpdir(), "unity-indexer-test-"));
+  }
+
+  it("removes unity-indexer entry from mcpServers", () => {
+    const dir = makeTempDir();
+    const filePath = join(dir, "settings.json");
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        mcpServers: {
+          "unity-indexer": { command: "npx", args: ["-y", "unity-indexer"] },
+          "other-server": { command: "other", args: [] },
+        },
+      }),
+    );
+    uninstallServer(filePath);
+    const content = JSON.parse(readFileSync(filePath, "utf-8"));
+    expect(content.mcpServers["unity-indexer"]).toBeUndefined();
+    expect(content.mcpServers["other-server"]).toEqual({ command: "other", args: [] });
+  });
+
+  it("preserves non-mcpServers settings", () => {
+    const dir = makeTempDir();
+    const filePath = join(dir, "settings.json");
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        permissions: { allow: [] },
+        mcpServers: { "unity-indexer": { command: "npx", args: ["-y", "unity-indexer"] } },
+      }),
+    );
+    uninstallServer(filePath);
+    const content = JSON.parse(readFileSync(filePath, "utf-8"));
+    expect(content.permissions).toEqual({ allow: [] });
+  });
+
+  it("throws when settings file does not exist", () => {
+    const dir = makeTempDir();
+    const filePath = join(dir, "nonexistent.json");
+    expect(() => {
+      uninstallServer(filePath);
+    }).toThrow("Settings file not found");
+  });
+
+  it("throws when unity-indexer is not in mcpServers", () => {
+    const dir = makeTempDir();
+    const filePath = join(dir, "settings.json");
+    writeFileSync(
+      filePath,
+      JSON.stringify({ mcpServers: { "other-server": { command: "other", args: [] } } }),
+    );
+    expect(() => {
+      uninstallServer(filePath);
+    }).toThrow("unity-indexer is not registered");
+  });
+
+  it("throws when mcpServers key does not exist", () => {
+    const dir = makeTempDir();
+    const filePath = join(dir, "settings.json");
+    writeFileSync(filePath, JSON.stringify({ permissions: {} }));
+    expect(() => {
+      uninstallServer(filePath);
+    }).toThrow("unity-indexer is not registered");
   });
 });
