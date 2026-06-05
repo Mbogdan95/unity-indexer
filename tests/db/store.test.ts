@@ -7,6 +7,7 @@ import type {
   ScriptMemberRow,
   GuidRow,
   ReferenceRow,
+  GraphEdgeRow,
 } from "../../src/types.js";
 
 // ---------------------------------------------------------------------------
@@ -467,5 +468,117 @@ describe("Store - transactions", () => {
     });
     expect(result).toBeGreaterThan(0);
     expect(store.getFileByPath("Assets/Scenes/Main.unity")).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("Store - graph edges", () => {
+  it("inserts and queries edges by source", () => {
+    const fileId = store.upsertFile(makeFile({ path: "A.cs", type: "script" }));
+    const scriptIdA = store.insertScript(makeScript(fileId, { class_name: "A" }));
+    const scriptIdB = store.insertScript(makeScript(fileId, { class_name: "B" }));
+
+    store.insertGraphEdge({
+      source_type: "script",
+      source_id: scriptIdA,
+      target_type: "script",
+      target_id: scriptIdB,
+      edge_type: "INHERITS",
+      metadata: null,
+      source_file_id: fileId,
+    });
+
+    const edges = store.getGraphEdgesBySource("script", scriptIdA);
+    expect(edges).toHaveLength(1);
+    expect(edges[0].edge_type).toBe("INHERITS");
+    expect(edges[0].target_id).toBe(scriptIdB);
+  });
+
+  it("queries edges by target", () => {
+    const fileId = store.upsertFile(makeFile({ path: "B.cs", type: "script" }));
+    const scriptIdA = store.insertScript(makeScript(fileId, { class_name: "X" }));
+    const scriptIdB = store.insertScript(makeScript(fileId, { class_name: "Y" }));
+
+    store.insertGraphEdge({
+      source_type: "script",
+      source_id: scriptIdA,
+      target_type: "script",
+      target_id: scriptIdB,
+      edge_type: "CALLS",
+      metadata: null,
+      source_file_id: fileId,
+    });
+
+    const edges = store.getGraphEdgesByTarget("script", scriptIdB);
+    expect(edges).toHaveLength(1);
+    expect(edges[0].source_id).toBe(scriptIdA);
+  });
+
+  it("deletes edges by source_file_id", () => {
+    const fileId = store.upsertFile(makeFile({ path: "C.cs", type: "script" }));
+    const scriptId = store.insertScript(makeScript(fileId, { class_name: "C" }));
+
+    store.insertGraphEdge({
+      source_type: "script",
+      source_id: scriptId,
+      target_type: "script",
+      target_id: 999,
+      edge_type: "CALLS",
+      metadata: null,
+      source_file_id: fileId,
+    });
+
+    store.deleteGraphEdgesByFile(fileId);
+    const edges = store.getGraphEdgesBySource("script", scriptId);
+    expect(edges).toHaveLength(0);
+  });
+
+  it("loads all edges", () => {
+    const fileId = store.upsertFile(makeFile({ path: "D.cs", type: "script" }));
+    const sA = store.insertScript(makeScript(fileId, { class_name: "D1" }));
+    const sB = store.insertScript(makeScript(fileId, { class_name: "D2" }));
+
+    store.insertGraphEdge({
+      source_type: "script",
+      source_id: sA,
+      target_type: "script",
+      target_id: sB,
+      edge_type: "INHERITS",
+      metadata: null,
+      source_file_id: fileId,
+    });
+    store.insertGraphEdge({
+      source_type: "script",
+      source_id: sB,
+      target_type: "script",
+      target_id: sA,
+      edge_type: "CALLS",
+      metadata: null,
+      source_file_id: fileId,
+    });
+
+    const all = store.getAllGraphEdges();
+    expect(all).toHaveLength(2);
+  });
+
+  it("handles unique constraint on duplicate edge", () => {
+    const fileId = store.upsertFile(makeFile({ path: "E.cs", type: "script" }));
+    const sA = store.insertScript(makeScript(fileId, { class_name: "E1" }));
+    const sB = store.insertScript(makeScript(fileId, { class_name: "E2" }));
+
+    const edge: GraphEdgeRow = {
+      source_type: "script",
+      source_id: sA,
+      target_type: "script",
+      target_id: sB,
+      edge_type: "INHERITS",
+      metadata: null,
+      source_file_id: fileId,
+    };
+
+    store.insertGraphEdge(edge);
+    store.insertGraphEdge(edge); // should not throw (INSERT OR IGNORE)
+    const edges = store.getGraphEdgesBySource("script", sA);
+    expect(edges).toHaveLength(1);
   });
 });

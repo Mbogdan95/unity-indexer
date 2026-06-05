@@ -175,5 +175,29 @@ CREATE TABLE IF NOT EXISTS change_log (
 CREATE INDEX IF NOT EXISTS idx_change_log_changed_at
   ON change_log (changed_at DESC);
 
+CREATE TABLE IF NOT EXISTS graph_edges (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_type     TEXT NOT NULL,
+  source_id       INTEGER NOT NULL,
+  target_type     TEXT NOT NULL,
+  target_id       INTEGER NOT NULL,
+  edge_type       TEXT NOT NULL,
+  metadata        TEXT,
+  source_file_id  INTEGER,
+  UNIQUE(source_type, source_id, target_type, target_id, edge_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_edges_source
+  ON graph_edges (source_type, source_id);
+
+CREATE INDEX IF NOT EXISTS idx_edges_target
+  ON graph_edges (target_type, target_id);
+
+CREATE INDEX IF NOT EXISTS idx_edges_file
+  ON graph_edges (source_file_id);
+
+CREATE INDEX IF NOT EXISTS idx_edges_type
+  ON graph_edges (edge_type);
+
 INSERT OR IGNORE INTO project_summary (id) VALUES (1);
 `;

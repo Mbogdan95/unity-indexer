@@ -11,6 +11,8 @@ import type {
   AssemblyRow,
   ChangeLogRow,
   ProjectSummaryRow,
+  GraphEdgeRow,
+  GraphNodeType,
 } from "../types.js";
 
 // SQLite stores booleans as 0/1; these helpers convert back to JS booleans.
@@ -752,6 +754,7 @@ export class Store {
 
       this.prepare("DELETE FROM scripts WHERE file_id = ?").run(fileId);
       this.prepare('DELETE FROM "references" WHERE source_file_id = ?').run(fileId);
+      this.prepare("DELETE FROM graph_edges WHERE source_file_id = ?").run(fileId);
       this.prepare("DELETE FROM guids WHERE file_id = ?").run(fileId);
       this.prepare("DELETE FROM assemblies WHERE file_id = ?").run(fileId);
     })();
@@ -808,6 +811,57 @@ export class Store {
     }
 
     return results.sort((a, b) => b.importance_score - a.importance_score).slice(0, 50);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Graph Edges
+  // ---------------------------------------------------------------------------
+
+  insertGraphEdge(edge: GraphEdgeRow): void {
+    this.prepare(
+      `
+      INSERT OR IGNORE INTO graph_edges
+        (source_type, source_id, target_type, target_id, edge_type, metadata, source_file_id)
+      VALUES
+        (@source_type, @source_id, @target_type, @target_id, @edge_type, @metadata, @source_file_id)
+    `,
+    ).run({
+      source_type: edge.source_type,
+      source_id: edge.source_id,
+      target_type: edge.target_type,
+      target_id: edge.target_id,
+      edge_type: edge.edge_type,
+      metadata: edge.metadata,
+      source_file_id: edge.source_file_id,
+    });
+  }
+
+  getGraphEdgesBySource(
+    sourceType: GraphNodeType,
+    sourceId: number,
+  ): (GraphEdgeRow & { id: number })[] {
+    return this.prepare("SELECT * FROM graph_edges WHERE source_type = ? AND source_id = ?").all(
+      sourceType,
+      sourceId,
+    ) as (GraphEdgeRow & { id: number })[];
+  }
+
+  getGraphEdgesByTarget(
+    targetType: GraphNodeType,
+    targetId: number,
+  ): (GraphEdgeRow & { id: number })[] {
+    return this.prepare("SELECT * FROM graph_edges WHERE target_type = ? AND target_id = ?").all(
+      targetType,
+      targetId,
+    ) as (GraphEdgeRow & { id: number })[];
+  }
+
+  deleteGraphEdgesByFile(fileId: number): void {
+    this.prepare("DELETE FROM graph_edges WHERE source_file_id = ?").run(fileId);
+  }
+
+  getAllGraphEdges(): (GraphEdgeRow & { id: number })[] {
+    return this.prepare("SELECT * FROM graph_edges").all() as (GraphEdgeRow & { id: number })[];
   }
 
   // ---------------------------------------------------------------------------
