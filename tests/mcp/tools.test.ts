@@ -61,9 +61,20 @@ describe("handleGetSceneHierarchy", () => {
       roots.every(
         (r) =>
           String(r.name).toLowerCase().includes("player") ||
-          String(r.tag).toLowerCase().includes("player"),
+          (typeof r.tag === "string" ? r.tag : "Untagged").toLowerCase().includes("player"),
       ),
     ).toBe(true);
+  });
+
+  it("omits default values from response", () => {
+    const result = handleGetSceneHierarchy(store, {
+      scene: "Assets/Scenes/MainScene.unity",
+    }) as Record<string, unknown>;
+    const roots = result.roots as Array<Record<string, unknown>>;
+    for (const root of roots) {
+      if ("active" in root) expect(root.active).toBe(false);
+      if ("tag" in root) expect(root.tag).not.toBe("Untagged");
+    }
   });
 
   it("returns error for missing scene", () => {
