@@ -4,6 +4,10 @@ import type { Store } from "../db/store.js";
 
 export type StoreResolver = (projectName?: string) => Store;
 
+function estimateTokens(obj: unknown): number {
+  return Math.ceil(JSON.stringify(obj).length / 4);
+}
+
 // ---------------------------------------------------------------------------
 // Handler functions (exported for testing)
 // ---------------------------------------------------------------------------
@@ -44,8 +48,7 @@ export function handleGetSceneHierarchy(
     .filter((go) => go.parent_file_id_local === null)
     .sort((a, b) => b.importance_score - a.importance_score);
 
-  return {
-    token_hint: roots.length * 10,
+  const response = {
     scene: params.scene,
     ...(resolvedFrom !== undefined ? { resolved_from: resolvedFrom, is_variant: true } : {}),
     roots: roots.map((go) => ({
@@ -57,6 +60,7 @@ export function handleGetSceneHierarchy(
       ...(!go.active ? { active: false } : {}),
     })),
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 export function handleGetPrefabStructure(
@@ -86,8 +90,7 @@ export function handleListScripts(
     isMonoBehaviour: params.is_monobehaviour,
   });
 
-  return {
-    token_hint: scripts.length * 5,
+  const response = {
     scripts: scripts.map((s) => ({
       class_name: s.class_name,
       ...(s.namespace ? { namespace: s.namespace } : {}),
@@ -99,6 +102,7 @@ export function handleListScripts(
     })),
     total: scripts.length,
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 export function handleListAssets(store: Store, params: { type?: string }): object {
@@ -109,14 +113,14 @@ export function handleListAssets(store: Store, params: { type?: string }): objec
       ? files.filter((f) => f.summary_line.toLowerCase().includes(typeFilter.toLowerCase()))
       : files;
 
-  return {
-    token_hint: filtered.length * 3,
+  const response = {
     assets: filtered.map((f) => ({
       path: f.path,
       summary: f.summary_line,
     })),
     total: filtered.length,
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 export function handleGetGameObject(
@@ -142,8 +146,7 @@ export function handleGetGameObject(
 
   const components = store.getComponentsByGameObject(go.id);
 
-  return {
-    token_hint: 50,
+  const response = {
     name: go.name,
     ...(resolvedFrom !== undefined ? { resolved_from: resolvedFrom, is_variant: true } : {}),
     ...(go.tag !== "Untagged" ? { tag: go.tag } : {}),
@@ -159,6 +162,7 @@ export function handleGetGameObject(
       serialized_fields: JSON.parse(c.serialized_fields) as unknown,
     })),
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 export function handleGetComponent(
@@ -194,8 +198,7 @@ export function handleGetComponent(
     };
   }
 
-  return {
-    token_hint: 30,
+  const response = {
     game_object: go.name,
     ...(resolvedFrom !== undefined ? { resolved_from: resolvedFrom, is_variant: true } : {}),
     type_name: comp.type_name,
@@ -203,6 +206,7 @@ export function handleGetComponent(
     field_summary: comp.field_summary,
     serialized_fields: JSON.parse(comp.serialized_fields) as unknown,
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 export function handleGetScriptDetail(store: Store, params: { class_name: string }): object {
@@ -213,8 +217,7 @@ export function handleGetScriptDetail(store: Store, params: { class_name: string
 
   const members = store.getScriptMembers(script.id);
 
-  return {
-    token_hint: 20 + members.length * 5,
+  const response = {
     class_name: script.class_name,
     ...(script.namespace ? { namespace: script.namespace } : {}),
     ...(script.base_class ? { base_class: script.base_class } : {}),
@@ -238,6 +241,7 @@ export function handleGetScriptDetail(store: Store, params: { class_name: string
       };
     }),
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 export function handleGetScriptMember(
@@ -259,8 +263,7 @@ export function handleGetScriptMember(
     };
   }
 
-  return {
-    token_hint: 15,
+  const response = {
     class_name: script.class_name,
     name: member.name,
     kind: member.kind,
@@ -272,6 +275,7 @@ export function handleGetScriptMember(
     has_serialize_field: member.has_serialize_field,
     has_header_attr: member.has_header_attr,
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 export function handleFindReferences(store: Store, params: { guid_or_name: string }): object {
@@ -300,8 +304,7 @@ export function handleFindReferences(store: Store, params: { guid_or_name: strin
 
   const refs = store.getReferencesToGuid(guid);
 
-  return {
-    token_hint: refs.length * 5,
+  const response = {
     guid,
     references: refs.map((r) => {
       const sourceFile = store.getFileById(r.source_file_id);
@@ -313,6 +316,7 @@ export function handleFindReferences(store: Store, params: { guid_or_name: strin
     }),
     total: refs.length,
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 export function handleFindDependencies(store: Store, params: { guid_or_name: string }): object {
@@ -342,8 +346,7 @@ export function handleFindDependencies(store: Store, params: { guid_or_name: str
 
   const refs = store.getReferencesFromFile(fileId);
 
-  return {
-    token_hint: refs.length * 5,
+  const response = {
     source: params.guid_or_name,
     dependencies: refs.map((r) => {
       const targetFile = r.target_file_id !== null ? store.getFileById(r.target_file_id) : null;
@@ -356,6 +359,7 @@ export function handleFindDependencies(store: Store, params: { guid_or_name: str
     }),
     total: refs.length,
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 export function handleResolveGuid(store: Store, params: { guid: string }): object {
@@ -369,12 +373,12 @@ export function handleResolveGuid(store: Store, params: { guid: string }): objec
   if (path !== null && path.endsWith(".meta")) {
     path = path.slice(0, -5);
   }
-  return {
-    token_hint: 10,
+  const response = {
     guid: guidRow.guid,
     path,
     asset_type: guidRow.asset_type,
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 export function handleSearch(
@@ -383,8 +387,7 @@ export function handleSearch(
 ): object {
   const results = store.search(params.query, params.scope);
 
-  return {
-    token_hint: results.length * 3,
+  const response = {
     query: params.query,
     results: results.map((r) => {
       let path: string | undefined;
@@ -414,6 +417,7 @@ export function handleSearch(
     }),
     total: results.length,
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 export function handleFindComponents(
@@ -448,8 +452,7 @@ export function handleFindComponents(
     }
   }
 
-  return {
-    token_hint: components.length * 5,
+  const response = {
     type: params.type,
     components: components.map((c) => {
       const go = store.getGameObjectById(c.game_object_id);
@@ -462,6 +465,7 @@ export function handleFindComponents(
     }),
     total: components.length,
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 export function handleRecentChanges(
@@ -475,8 +479,7 @@ export function handleRecentChanges(
   const filtered =
     sinceFilter !== undefined ? changes.filter((c) => c.changed_at > sinceFilter) : changes;
 
-  return {
-    token_hint: filtered.length * 3,
+  const response = {
     changes: filtered.map((c) => ({
       path: c.path,
       change_type: c.change_type,
@@ -484,6 +487,7 @@ export function handleRecentChanges(
     })),
     total: filtered.length,
   };
+  return { token_hint: estimateTokens(response), ...response };
 }
 
 // ---------------------------------------------------------------------------
