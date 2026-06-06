@@ -1,0 +1,358 @@
+import type { Node } from "web-tree-sitter";
+import type { GraphEdgeType } from "../types.js";
+import { getParser } from "./script-parser.js";
+
+export interface ExtractedRelationship {
+  sourceClassName: string;
+  edgeType: GraphEdgeType;
+  targetClassName: string;
+}
+
+// Unity built-in types to ignore
+const UNITY_BUILTIN_TYPES = new Set([
+  // Core Unity types
+  "MonoBehaviour",
+  "NetworkBehaviour",
+  "ScriptableObject",
+  "GameObject",
+  "Transform",
+  "RectTransform",
+  "Component",
+  "Behaviour",
+  "Object",
+  // Rendering
+  "Renderer",
+  "MeshRenderer",
+  "SkinnedMeshRenderer",
+  "SpriteRenderer",
+  "LineRenderer",
+  "TrailRenderer",
+  "MeshFilter",
+  // Physics
+  "Rigidbody",
+  "Rigidbody2D",
+  "Collider",
+  "Collider2D",
+  "BoxCollider",
+  "BoxCollider2D",
+  "SphereCollider",
+  "CapsuleCollider",
+  "CapsuleCollider2D",
+  "MeshCollider",
+  "CircleCollider2D",
+  "PolygonCollider2D",
+  "EdgeCollider2D",
+  // Audio
+  "AudioSource",
+  "AudioListener",
+  "AudioClip",
+  // Utilities
+  "Debug",
+  "Time",
+  "Input",
+  "Screen",
+  "Application",
+  "Resources",
+  "Mathf",
+  "Random",
+  "Physics",
+  "Physics2D",
+  "Vector2",
+  "Vector3",
+  "Vector4",
+  "Quaternion",
+  "Color",
+  "Color32",
+  "Matrix4x4",
+  "Rect",
+  "Bounds",
+  "Ray",
+  "RaycastHit",
+  "LayerMask",
+  // Animation
+  "Animator",
+  "Animation",
+  "AnimationClip",
+  // UI
+  "Canvas",
+  "CanvasGroup",
+  "CanvasRenderer",
+  "Image",
+  "Text",
+  "Button",
+  "Slider",
+  "Toggle",
+  "InputField",
+  // Cameras
+  "Camera",
+  // Lighting
+  "Light",
+  // NavMesh
+  "NavMeshAgent",
+  "NavMeshObstacle",
+  // Particles
+  "ParticleSystem",
+  // Coroutines / Mono lifecycle
+  "Coroutine",
+  "WaitForSeconds",
+  "WaitForEndOfFrame",
+  "WaitUntil",
+  "WaitWhile",
+  // C# system types that might appear as receivers
+  "String",
+  "Math",
+  "Convert",
+  "Console",
+  "Array",
+  "List",
+  "Dictionary",
+  "HashSet",
+  "Queue",
+  "Stack",
+  "Linq",
+  "Enumerable",
+  "Task",
+  "Thread",
+  "Action",
+  "Func",
+  "EventHandler",
+  "Type",
+  "Enum",
+  "BitConverter",
+  "GC",
+  "GUILayout",
+  "GUI",
+  "EditorGUILayout",
+  "EditorGUI",
+  "EditorUtility",
+  "AssetDatabase",
+  "Undo",
+  "Selection",
+  "PrefabUtility",
+  "Handles",
+  "SceneView",
+  "Gizmos",
+  "TextMeshPro",
+  "TextMeshProUGUI",
+]);
+
+function isUppercase(name: string): boolean {
+  return name.length > 0 && name[0] === name[0].toUpperCase() && name[0] !== name[0].toLowerCase();
+}
+
+/**
+ * Walk all descendants of a node, calling visitor for each.
+ */
+function walkAll(node: Node, visitor: (n: Node) => void): void {
+  visitor(node);
+  for (const child of node.children) {
+    walkAll(child, visitor);
+  }
+}
+
+/**
+ * Collect all class/struct names declared in the file so we can map
+ * method bodies back to their containing class.
+ */
+interface ClassBodyRange {
+  className: string;
+  startIndex: number;
+  endIndex: number;
+}
+
+function collectClassBodies(root: Node): ClassBodyRange[] {
+  const ranges: ClassBodyRange[] = [];
+
+  function walk(node: Node): void {
+    if (node.type === "class_declaration" || node.type === "struct_declaration") {
+      const nameNode = node.childForFieldName("name");
+      const bodyNode = node.childForFieldName("body");
+      if (nameNode && bodyNode) {
+        ranges.push({
+          className: nameNode.text,
+          startIndex: bodyNode.startIndex,
+          endIndex: bodyNode.endIndex,
+        });
+      }
+    }
+    for (const child of node.namedChildren) {
+      walk(child);
+    }
+  }
+
+  walk(root);
+  return ranges;
+}
+
+function findSourceClass(index: number, classBodies: ClassBodyRange[]): string {
+  // Find the most specific (innermost) class body that contains this index
+  let best: ClassBodyRange | null = null;
+  for (const range of classBodies) {
+    if (index >= range.startIndex && index <= range.endIndex) {
+      if (!best || range.endIndex - range.startIndex < best.endIndex - best.startIndex) {
+        best = range;
+      }
+    }
+  }
+  return best?.className ?? "";
+}
+
+/**
+ * Extract a type name from a generic_name node, e.g. "GetComponent<PlayerController>"
+ * returns "PlayerController".
+ */
+function extractGenericTypeArg(genericNameNode: Node): string | null {
+  // generic_name structure: identifier type_argument_list
+  // type_argument_list: < type_arguments >
+  const typeArgList = genericNameNode.namedChildren.find((c) => c.type === "type_argument_list");
+  if (!typeArgList) return null;
+
+  // The type arguments are the children of type_argument_list that are type nodes
+  // Typically: `<`, identifier/predefined_type, `>`
+  for (const child of typeArgList.namedChildren) {
+    if (
+      child.type === "identifier" ||
+      child.type === "qualified_name" ||
+      child.type === "generic_name"
+    ) {
+      return child.text.split("<")[0].trim();
+    }
+  }
+  return null;
+}
+
+export function extractRelationships(content: string): ExtractedRelationship[] {
+  const parser = getParser();
+  if (!parser) {
+    throw new Error("Script parser not initialized. Call initScriptParser() first.");
+  }
+
+  const tree = parser.parse(content);
+  if (!tree) return [];
+
+  const results: ExtractedRelationship[] = [];
+  const classBodies = collectClassBodies(tree.rootNode);
+
+  walkAll(tree.rootNode, (node) => {
+    const sourceClassName = findSourceClass(node.startIndex, classBodies);
+    if (!sourceClassName) return;
+
+    // Pattern 1: GetComponent<T>() calls
+    if (node.type === "invocation_expression") {
+      const fnNode = node.childForFieldName("function");
+      if (fnNode) {
+        // GetComponent<T> appears as a member_access_expression or directly as generic_name
+        // e.g. GetComponent<PlayerController>() -> function is generic_name
+        // or GetComponent<PlayerController> after dot -> member_access_expression -> generic_name
+
+        let genericName: Node | null = null;
+
+        if (fnNode.type === "generic_name") {
+          genericName = fnNode;
+        } else if (fnNode.type === "member_access_expression") {
+          const nameField = fnNode.childForFieldName("name");
+          if (nameField && nameField.type === "generic_name") {
+            genericName = nameField;
+          }
+        }
+
+        if (genericName) {
+          const identNode = genericName.namedChildren.find((c) => c.type === "identifier");
+          const methodName = identNode?.text ?? genericName.text.split("<")[0];
+          if (
+            methodName === "GetComponent" ||
+            methodName === "AddComponent" ||
+            methodName === "GetComponentInChildren" ||
+            methodName === "GetComponentInParent"
+          ) {
+            const typeArg = extractGenericTypeArg(genericName);
+            if (typeArg !== null && !UNITY_BUILTIN_TYPES.has(typeArg)) {
+              results.push({
+                sourceClassName,
+                edgeType: "CALLS",
+                targetClassName: typeArg,
+              });
+            }
+          }
+        }
+
+        // Pattern 2: Static method calls — Receiver.Method() where receiver is uppercase
+        // invocation_expression -> member_access_expression -> (expression, name)
+        if (fnNode.type === "member_access_expression") {
+          const exprNode = fnNode.childForFieldName("expression");
+          const nameNode = fnNode.childForFieldName("name");
+
+          if (exprNode && nameNode) {
+            // The receiver should be an identifier (not a local variable) that starts with uppercase
+            if (
+              exprNode.type === "identifier" &&
+              isUppercase(exprNode.text) &&
+              !UNITY_BUILTIN_TYPES.has(exprNode.text) &&
+              exprNode.text !== sourceClassName // skip self-calls
+            ) {
+              results.push({
+                sourceClassName,
+                edgeType: "CALLS",
+                targetClassName: exprNode.text,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Pattern 3: Constructor calls — new T(...)
+    if (node.type === "object_creation_expression") {
+      const typeNode = node.childForFieldName("type");
+      if (typeNode) {
+        const typeName = typeNode.text.split("<")[0].trim();
+        if (isUppercase(typeName) && !UNITY_BUILTIN_TYPES.has(typeName)) {
+          results.push({
+            sourceClassName,
+            edgeType: "CALLS",
+            targetClassName: typeName,
+          });
+        }
+      }
+    }
+
+    // Pattern 4: Event subscriptions — SomeManager.OnEvent += Handler
+    if (node.type === "assignment_expression") {
+      // Check if operator is +=
+      const operatorNode = node.children.find((c) => c.type === "+=" || c.text === "+=");
+      if (operatorNode) {
+        const leftNode = node.childForFieldName("left");
+        if (leftNode && leftNode.type === "member_access_expression") {
+          const exprNode = leftNode.childForFieldName("expression");
+          if (
+            exprNode &&
+            exprNode.type === "identifier" &&
+            isUppercase(exprNode.text) &&
+            !UNITY_BUILTIN_TYPES.has(exprNode.text) &&
+            exprNode.text !== sourceClassName
+          ) {
+            results.push({
+              sourceClassName,
+              edgeType: "SUBSCRIBES_TO",
+              targetClassName: exprNode.text,
+            });
+          }
+        }
+      }
+    }
+  });
+
+  // Deduplicate relationships
+  const seen = new Set<string>();
+  const deduped: ExtractedRelationship[] = [];
+  for (const rel of results) {
+    const key = `${rel.sourceClassName}|${rel.edgeType}|${rel.targetClassName}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(rel);
+    }
+  }
+
+  tree.delete();
+  return deduped;
+}

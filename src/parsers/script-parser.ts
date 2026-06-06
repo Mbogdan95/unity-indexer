@@ -35,6 +35,10 @@ export async function initScriptParser(): Promise<void> {
   parser.setLanguage(lang);
 }
 
+export function getParser(): Parser | null {
+  return parser;
+}
+
 export function parseScript(content: string): ParsedScript[] {
   if (!parser) {
     throw new Error("Script parser not initialized. Call initScriptParser() first.");
