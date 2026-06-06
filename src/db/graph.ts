@@ -1,4 +1,4 @@
-import { DirectedGraph } from "graphology";
+import { MultiDirectedGraph } from "graphology";
 import { bidirectional } from "graphology-shortest-path/unweighted.js";
 import { connectedComponents } from "graphology-components";
 import type { GraphEdgeRow, GraphEdgeType } from "../types.js";
@@ -51,10 +51,10 @@ function edgeKey(src: string, tgt: string, edgeType: GraphEdgeType): string {
 // ---------------------------------------------------------------------------
 
 export class GraphManager {
-  private g: DirectedGraph<Record<string, never>, EdgeAttrs>;
+  private g: MultiDirectedGraph<Record<string, never>, EdgeAttrs>;
 
   constructor() {
-    this.g = new DirectedGraph();
+    this.g = new MultiDirectedGraph();
   }
 
   // -------------------------------------------------------------------------
@@ -229,9 +229,9 @@ export class GraphManager {
       const src = nodePath[i];
       const tgt = nodePath[i + 1];
       // Get the edge type from the first edge between these two nodes
-      const edgeKey = this.g.edge(src, tgt);
-      if (edgeKey !== undefined) {
-        const attrs = this.g.getEdgeAttributes(edgeKey);
+      const edgeKeys = this.g.edges(src, tgt);
+      if (edgeKeys.length > 0) {
+        const attrs = this.g.getEdgeAttributes(edgeKeys[0]);
         edges.push({ source: src, target: tgt, type: attrs.type });
       }
     }

@@ -19,8 +19,14 @@ import {
   computeGameObjectImportance,
   computeFileImportance,
 } from "../db/summaries.js";
+import { extractRelationships } from "../parsers/relationship-extractor.js";
 import { detectFileType } from "../types.js";
-import type { ParsedGameObject, ParsedGuidReference } from "../types.js";
+import type {
+  ParsedGameObject,
+  ParsedGuidReference,
+  GraphEdgeRow,
+  GraphEdgeType,
+} from "../types.js";
 
 function log(msg: string): void {
   console.error(`[unity-indexer] ${msg}`);
@@ -101,6 +107,11 @@ export class Indexer {
     this.store.recomputeReferenceCounts();
     endPhase?.();
 
+    log("hydrating graph...");
+    endPhase = this.benchmark?.startPhase("graph");
+    this.store.hydrateGraph();
+    endPhase?.();
+
     endPhase = this.benchmark?.startPhase("summary");
     this.updateProjectSummary();
     endPhase?.();
@@ -125,6 +136,7 @@ export class Indexer {
       this.indexFileInternal(relativePath);
     });
     this.store.recomputeReferenceCounts();
+    this.store.hydrateGraph();
     this.updateProjectSummary();
   }
 
@@ -143,7 +155,32 @@ export class Indexer {
     });
 
     this.store.recomputeReferenceCounts();
+    this.store.hydrateGraph();
     this.updateProjectSummary();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private: Graph edge helper
+  // ---------------------------------------------------------------------------
+
+  private insertEdge(
+    sourceType: GraphEdgeRow["source_type"],
+    sourceId: number,
+    targetType: GraphEdgeRow["target_type"],
+    targetId: number,
+    edgeType: GraphEdgeType,
+    sourceFileId: number,
+    metadata: string | null = null,
+  ): void {
+    this.store.insertGraphEdge({
+      source_type: sourceType,
+      source_id: sourceId,
+      target_type: targetType,
+      target_id: targetId,
+      edge_type: edgeType,
+      metadata,
+      source_file_id: sourceFileId,
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -439,6 +476,35 @@ export class Indexer {
           changeFrequency: 0,
         });
       }
+
+      // Graph edges: DEFINED_IN
+      this.insertEdge("script", scriptId, "file", fileId, "DEFINED_IN", fileId);
+
+      // Graph edges: INHERITS (if base_class resolves to a known script)
+      if (script.baseClass) {
+        const baseScript = this.store.getScriptByClassName(script.baseClass);
+        if (baseScript) {
+          this.insertEdge("script", scriptId, "script", baseScript.id, "INHERITS", fileId);
+        }
+      }
+
+      // Graph edges: IMPLEMENTS
+      for (const iface of script.interfaces) {
+        const ifaceScript = this.store.getScriptByClassName(iface);
+        if (ifaceScript) {
+          this.insertEdge("script", scriptId, "script", ifaceScript.id, "IMPLEMENTS", fileId);
+        }
+      }
+    }
+
+    // Graph edges: CALLS and SUBSCRIBES_TO from AST analysis
+    const relationships = extractRelationships(content);
+    for (const rel of relationships) {
+      const sourceScript = this.store.getScriptByClassName(rel.sourceClassName);
+      const targetScript = this.store.getScriptByClassName(rel.targetClassName);
+      if (sourceScript && targetScript) {
+        this.insertEdge("script", sourceScript.id, "script", targetScript.id, rel.edgeType, fileId);
+      }
     }
 
     this.store.upsertFile({
@@ -513,6 +579,7 @@ export class Indexer {
     }
 
     const siblingCounters = new Map<string, number>();
+    const localIdToDbId = new Map<string, number>();
 
     const insertRecursive = (go: ParsedGameObject, depth: number): number => {
       const children = childMap.get(go.fileIdLocal) ?? [];
@@ -559,13 +626,15 @@ export class Indexer {
         importance_score: importance,
       });
 
+      localIdToDbId.set(go.fileIdLocal, goId);
+
       for (const comp of go.components) {
         const fieldSummary = generateFieldSummary(comp.serializedFields, guidToClass);
         const patternHash = createHash("md5")
           .update(comp.typeName + JSON.stringify(Object.keys(comp.serializedFields).sort()))
           .digest("hex");
 
-        this.store.insertComponent({
+        const compId = this.store.insertComponent({
           game_object_id: goId,
           type_name: comp.typeName,
           script_guid: comp.scriptGuid,
@@ -574,6 +643,20 @@ export class Indexer {
           field_summary: fieldSummary,
           pattern_hash: patternHash,
         });
+
+        // Graph edge: ATTACHES_TO
+        this.insertEdge("component", compId, "game_object", goId, "ATTACHES_TO", fileId);
+
+        // Graph edge: SCRIPTED_BY
+        if (comp.scriptGuid !== null) {
+          const targetClassName = guidToClass.get(comp.scriptGuid);
+          if (targetClassName !== undefined) {
+            const scriptRow = this.store.getScriptByClassName(targetClassName);
+            if (scriptRow !== undefined) {
+              this.insertEdge("component", compId, "script", scriptRow.id, "SCRIPTED_BY", fileId);
+            }
+          }
+        }
       }
 
       return subtreeDepth;
@@ -581,6 +664,17 @@ export class Indexer {
 
     for (const root of roots) {
       insertRecursive(root, 0);
+    }
+
+    // Graph edges: CHILD_OF
+    for (const go of gameObjects) {
+      if (go.parentFileIdLocal !== null) {
+        const childDbId = localIdToDbId.get(go.fileIdLocal);
+        const parentDbId = localIdToDbId.get(go.parentFileIdLocal);
+        if (childDbId !== undefined && parentDbId !== undefined) {
+          this.insertEdge("game_object", childDbId, "game_object", parentDbId, "CHILD_OF", fileId);
+        }
+      }
     }
   }
 
@@ -597,6 +691,11 @@ export class Indexer {
         target_file_id: targetFileId,
         ref_type: ref.refType,
       });
+
+      // Graph edge: REFERENCES_GUID
+      if (targetFileId !== null) {
+        this.insertEdge("file", fileId, "file", targetFileId, "REFERENCES_GUID", fileId);
+      }
     }
   }
 

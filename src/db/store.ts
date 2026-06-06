@@ -1,5 +1,6 @@
 import Database, { type Database as DatabaseType, type Statement } from "better-sqlite3";
 import { SCHEMA_SQL } from "./schema.js";
+import { GraphManager } from "./graph.js";
 import type {
   FileRow,
   GameObjectRow,
@@ -93,6 +94,12 @@ function memberRowOut(row: Record<string, unknown>): ScriptMemberRow & { id: num
 export class Store {
   private db: DatabaseType;
   private stmtCache = new Map<string, Statement>();
+
+  public readonly graph = new GraphManager();
+
+  hydrateGraph(): void {
+    this.graph.hydrate(this.getAllGraphEdges());
+  }
 
   private prepare(sql: string): Statement {
     let stmt = this.stmtCache.get(sql);
