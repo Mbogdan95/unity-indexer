@@ -8,6 +8,7 @@ import { FileWatcher } from "../indexer/file-watcher.js";
 import { initScriptParser } from "../parsers/script-parser.js";
 import { getProjectSummary, getProjectFiles } from "./resources.js";
 import { registerTools, type StoreResolver } from "./tools.js";
+import { registerGraphTools } from "./graph-tools.js";
 import { discoverUnityProjects, ensureDbDir } from "../discovery.js";
 
 interface ProjectInstance {
@@ -188,6 +189,7 @@ export async function startServer(rootDir: string): Promise<void> {
   );
 
   registerTools(server, resolveStore);
+  registerGraphTools(server, resolveStore);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
