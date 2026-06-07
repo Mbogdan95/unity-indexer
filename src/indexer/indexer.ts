@@ -385,6 +385,22 @@ export class Indexer {
       status: "ok",
       source_prefab_guid: parsed.sourcePrefabGuid,
     });
+
+    if (parsed.sourcePrefabGuid !== null) {
+      const guidRow = this.store.resolveGuid(parsed.sourcePrefabGuid);
+      if (guidRow) {
+        const metaFile = this.store.getFileById(guidRow.file_id);
+        if (metaFile) {
+          const basePath = metaFile.path.endsWith(".meta")
+            ? metaFile.path.slice(0, -5)
+            : metaFile.path;
+          const baseFile = this.store.getFileByPath(basePath);
+          if (baseFile) {
+            this.insertEdge("file", fileId, "file", baseFile.id, "VARIANT_OF", fileId);
+          }
+        }
+      }
+    }
   }
 
   private indexAssetFile(
@@ -530,7 +546,7 @@ export class Indexer {
     const depSummary =
       parsed.references.length > 0 ? `refs: ${parsed.references.join(", ")}` : "no references";
 
-    this.store.insertAssembly({
+    const asmId = this.store.insertAssembly({
       file_id: fileId,
       name: parsed.name,
       references: JSON.stringify(parsed.references),
@@ -538,6 +554,16 @@ export class Indexer {
       platforms: JSON.stringify([...parsed.includePlatforms, ...parsed.excludePlatforms]),
       dependency_summary: depSummary,
     });
+
+    this.insertEdge("file", fileId, "assembly", asmId, "BELONGS_TO", fileId);
+
+    for (const refName of parsed.references) {
+      const allAssemblies = this.store.listAssemblies();
+      const targetAsm = allAssemblies.find((a) => a.name === refName);
+      if (targetAsm) {
+        this.insertEdge("assembly", asmId, "assembly", targetAsm.id, "ASSEMBLY_DEPENDS", fileId);
+      }
+    }
 
     const fileName = basename(relativePath);
     const summaryLine = generateFileSummaryLine("asmdef", fileName, {
