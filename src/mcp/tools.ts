@@ -1,11 +1,21 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Store } from "../db/store.js";
+import { encodeNodeId } from "../types.js";
 
 export type StoreResolver = (projectName?: string) => Store;
 
 function estimateTokens(obj: unknown): number {
   return Math.ceil(JSON.stringify(obj).length / 4);
+}
+
+function resolveToNodeId(store: Store, identifier: string): string | null {
+  const script = store.getScriptByClassName(identifier);
+  if (script) return encodeNodeId("script", script.id);
+  const file = store.getFileByPath(identifier);
+  if (file) return encodeNodeId("file", file.id);
+  if (identifier.includes(":")) return identifier;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -280,7 +290,23 @@ export function handleGetScriptMember(
   return { token_hint: estimateTokens(response), ...response };
 }
 
-export function handleFindReferences(store: Store, params: { guid_or_name: string }): object {
+export function handleFindReferences(
+  store: Store,
+  params: { guid_or_name: string; depth?: number },
+): object {
+  if (params.depth !== undefined && params.depth > 1) {
+    const nodeId = resolveToNodeId(store, params.guid_or_name);
+    if (nodeId === null) return { token_hint: 10, error: `Cannot resolve: ${params.guid_or_name}` };
+    const result = store.graph.traceDependents(nodeId, params.depth);
+    const response = {
+      guid_or_name: params.guid_or_name,
+      nodes: result.nodes.map((n) => ({ id: n.id, depth: n.depth })),
+      edges: result.edges,
+      total: result.nodes.length - 1,
+    };
+    return { token_hint: estimateTokens(response), ...response };
+  }
+
   let guid = params.guid_or_name;
 
   // Heuristic: if it looks like a name (short, has dots/uppercase), resolve to GUID first
@@ -321,7 +347,23 @@ export function handleFindReferences(store: Store, params: { guid_or_name: strin
   return { token_hint: estimateTokens(response), ...response };
 }
 
-export function handleFindDependencies(store: Store, params: { guid_or_name: string }): object {
+export function handleFindDependencies(
+  store: Store,
+  params: { guid_or_name: string; depth?: number },
+): object {
+  if (params.depth !== undefined && params.depth > 1) {
+    const nodeId = resolveToNodeId(store, params.guid_or_name);
+    if (nodeId === null) return { token_hint: 10, error: `Cannot resolve: ${params.guid_or_name}` };
+    const result = store.graph.traceDependencies(nodeId, params.depth);
+    const response = {
+      source: params.guid_or_name,
+      nodes: result.nodes.map((n) => ({ id: n.id, depth: n.depth })),
+      edges: result.edges,
+      total: result.nodes.length - 1,
+    };
+    return { token_hint: estimateTokens(response), ...response };
+  }
+
   let fileId: number | null = null;
 
   // Try to find by path first
@@ -640,6 +682,13 @@ export function registerTools(server: McpServer, resolveStore: StoreResolver): v
       description: "Find all files/objects that reference a given GUID or script class name.",
       inputSchema: {
         guid_or_name: z.string().describe("Asset GUID or script class name"),
+        depth: z
+          .number()
+          .int()
+          .min(1)
+          .max(10)
+          .optional()
+          .describe("Traversal depth (1 = direct refs, >1 = transitive via graph)"),
         project: z
           .string()
           .optional()
@@ -655,6 +704,13 @@ export function registerTools(server: McpServer, resolveStore: StoreResolver): v
       description: "Find all dependencies (outgoing references) of a file, script class, or GUID.",
       inputSchema: {
         guid_or_name: z.string().describe("File path, script class name, or GUID"),
+        depth: z
+          .number()
+          .int()
+          .min(1)
+          .max(10)
+          .optional()
+          .describe("Traversal depth (1 = direct deps, >1 = transitive via graph)"),
         project: z
           .string()
           .optional()

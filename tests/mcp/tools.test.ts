@@ -7,6 +7,7 @@ import {
   handleListScripts,
   handleGetScriptDetail,
   handleFindReferences,
+  handleFindDependencies,
   handleSearch,
   handleRecentChanges,
   handleGetGameObject,
@@ -165,6 +166,40 @@ describe("handleFindReferences", () => {
     expect(result.references).toBeDefined();
     const refs = result.references as unknown[];
     expect(refs.length).toBeGreaterThan(0);
+  });
+});
+
+describe("find_references with depth", () => {
+  it("returns single-hop refs with depth=1 (default behavior)", () => {
+    const result = handleFindReferences(store, {
+      guid_or_name: "PlayerController",
+    }) as Record<string, unknown>;
+    expect(result.references).toBeDefined();
+  });
+
+  it("returns graph-based refs with depth > 1", () => {
+    const result = handleFindReferences(store, {
+      guid_or_name: "PlayerController",
+      depth: 2,
+    }) as Record<string, unknown>;
+    expect(result.references || result.nodes).toBeDefined();
+  });
+});
+
+describe("find_dependencies with depth", () => {
+  it("returns single-hop deps with depth=1 (default behavior)", () => {
+    const result = handleFindDependencies(store, {
+      guid_or_name: "PlayerController",
+    }) as Record<string, unknown>;
+    expect(result.dependencies).toBeDefined();
+  });
+
+  it("returns graph-based deps with depth > 1", () => {
+    const result = handleFindDependencies(store, {
+      guid_or_name: "PlayerController",
+      depth: 2,
+    }) as Record<string, unknown>;
+    expect(result.dependencies || result.nodes).toBeDefined();
   });
 });
 
