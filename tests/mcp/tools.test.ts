@@ -145,6 +145,19 @@ describe("handleGetScriptDetail", () => {
     >;
     expect(result.error).toBeDefined();
   });
+
+  it("includes relationships from graph", () => {
+    const result = handleGetScriptDetail(store, { class_name: "PlayerController" }) as Record<
+      string,
+      unknown
+    >;
+    expect(result.relationships).toBeDefined();
+    const rels = result.relationships as Record<string, unknown>;
+    expect(rels).toHaveProperty("inherits");
+    expect(rels).toHaveProperty("implements");
+    expect(rels).toHaveProperty("callers");
+    expect(rels).toHaveProperty("callees");
+  });
 });
 
 describe("handleFindReferences", () => {

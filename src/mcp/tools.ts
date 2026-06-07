@@ -251,7 +251,19 @@ export function handleGetScriptDetail(store: Store, params: { class_name: string
       };
     }),
   };
-  return { token_hint: estimateTokens(response), ...response };
+
+  const scriptNodeId = encodeNodeId("script", script.id);
+  const outgoing = store.graph.getOutgoing(scriptNodeId);
+  const incoming = store.graph.getIncoming(scriptNodeId);
+
+  const relationships = {
+    inherits: outgoing.filter((n) => n.edgeType === "INHERITS").map((n) => n.nodeId),
+    implements: outgoing.filter((n) => n.edgeType === "IMPLEMENTS").map((n) => n.nodeId),
+    callees: outgoing.filter((n) => n.edgeType === "CALLS").map((n) => n.nodeId),
+    callers: incoming.filter((n) => n.edgeType === "CALLS").map((n) => n.nodeId),
+  };
+
+  return { token_hint: estimateTokens({ ...response, relationships }), ...response, relationships };
 }
 
 export function handleGetScriptMember(
