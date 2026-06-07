@@ -21,7 +21,7 @@ function resolveIdentifier(store: Store, identifier: string): string | null {
   // 3. Try as literal node ID (e.g., "script:42")
   if (identifier.includes(":")) {
     const decoded = decodeNodeId(identifier);
-    if (decoded.type !== "" && !Number.isNaN(decoded.id)) return identifier;
+    if (!Number.isNaN(decoded.id)) return identifier;
   }
 
   return null;
