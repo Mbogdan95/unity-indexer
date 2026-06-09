@@ -351,10 +351,12 @@ export function handleFindReferences(
   // Heuristic: if it looks like a name (short, has dots/uppercase), resolve to GUID first
   const looksLikeName = guid.length < 32 || guid.includes(".") || /[A-Z]/.test(guid);
 
+  let scriptNodeId: string | null = null;
   if (looksLikeName) {
     // Try to find a script with this class name and resolve its GUID
     const script = store.getScriptByClassName(guid);
     if (script) {
+      scriptNodeId = encodeNodeId("script", script.id);
       const fileRow = store.getFileById(script.file_id);
       if (fileRow) {
         const metaPath = fileRow.path + ".meta";
@@ -371,6 +373,28 @@ export function handleFindReferences(
 
   const refs = store.getReferencesToGuid(guid);
 
+  // Graph-based code references (CALLS, USES, SUBSCRIBES_TO, IMPLEMENTS, INHERITS inbound)
+  // Complement GUID refs — works even when scenes/prefabs not yet indexed.
+  const codeRefs: { class_name: string; edge_type: string; file_path?: string }[] = [];
+  if (scriptNodeId !== null) {
+    const incoming = store.graph.getIncoming(scriptNodeId);
+    for (const n of incoming) {
+      if (!["CALLS", "USES", "SUBSCRIBES_TO", "IMPLEMENTS", "INHERITS"].includes(n.edgeType)) {
+        continue;
+      }
+      const { type, id } = decodeNodeId(n.nodeId);
+      if (type !== "script") continue;
+      const src = store.getScriptById(id);
+      if (!src) continue;
+      const srcFile = store.getFileById(src.file_id);
+      codeRefs.push({
+        class_name: src.class_name,
+        edge_type: n.edgeType,
+        ...(srcFile ? { file_path: srcFile.path } : {}),
+      });
+    }
+  }
+
   const response = {
     guid,
     references: refs.map((r) => {
@@ -382,6 +406,7 @@ export function handleFindReferences(
       };
     }),
     total: refs.length,
+    ...(codeRefs.length > 0 ? { code_references: codeRefs, code_total: codeRefs.length } : {}),
   };
   return { token_hint: estimateTokens(response), ...response };
 }
@@ -753,7 +778,10 @@ export function registerTools(server: McpServer, resolveStore: StoreResolver): v
   server.registerTool(
     "find_references",
     {
-      description: "Find all files/objects that reference a given GUID or script class name.",
+      description:
+        "Find all files/objects that reference a given GUID or script class name. " +
+        "When a class name is given, returns both GUID-based scene/prefab usage (field 'references') " +
+        "and graph-based code callers (field 'code_references': CALLS, USES, SUBSCRIBES_TO, IMPLEMENTS, INHERITS).",
       inputSchema: {
         guid_or_name: z.string().describe("Asset GUID or script class name"),
         depth: z

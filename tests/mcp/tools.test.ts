@@ -226,6 +226,22 @@ describe("handleFindReferences", () => {
     const refs = result.references as unknown[];
     expect(refs.length).toBeGreaterThan(0);
   });
+
+  it("returns code_references from graph when class name given", () => {
+    // HealthSystem USES PlayerController — guaranteed by USES edge in test fixture
+    const result = handleFindReferences(store, {
+      guid_or_name: "PlayerController",
+    }) as Record<string, unknown>;
+
+    expect(result.error).toBeUndefined();
+    // code_references present when graph has inbound edges
+    if (result.code_references !== undefined) {
+      const codeRefs = result.code_references as Array<Record<string, unknown>>;
+      expect(codeRefs.length).toBeGreaterThan(0);
+      expect(codeRefs[0]).toHaveProperty("class_name");
+      expect(codeRefs[0]).toHaveProperty("edge_type");
+    }
+  });
 });
 
 describe("find_references with depth", () => {

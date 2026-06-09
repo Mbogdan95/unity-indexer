@@ -197,6 +197,28 @@ describe("Store - scripts", () => {
     expect(found!.base_class).toBe("MonoBehaviour");
   });
 
+  it("filters scripts by namespace prefix", () => {
+    const fileId = store.upsertFile(makeFile({ path: "ns.cs", type: "script" }));
+    store.insertScript(makeScript(fileId, { class_name: "Root", namespace: "Game" }));
+    store.insertScript(makeScript(fileId, { class_name: "Child", namespace: "Game.Player" }));
+    store.insertScript(
+      makeScript(fileId, { class_name: "Nested", namespace: "Game.Player.State" }),
+    );
+    store.insertScript(makeScript(fileId, { class_name: "Other", namespace: "UI" }));
+
+    const exact = store.listScripts({ namespace: "Game" });
+    expect(exact.map((s) => s.class_name).sort()).toEqual(["Child", "Nested", "Root"]);
+
+    const sub = store.listScripts({ namespace: "Game.Player" });
+    expect(sub.map((s) => s.class_name).sort()).toEqual(["Child", "Nested"]);
+
+    const uiOnly = store.listScripts({ namespace: "UI" });
+    expect(uiOnly.map((s) => s.class_name)).toEqual(["Other"]);
+
+    const noMatch = store.listScripts({ namespace: "Other" });
+    expect(noMatch).toHaveLength(0);
+  });
+
   it("filters scripts by isMonoBehaviour", () => {
     const fileId = store.upsertFile(makeFile({ path: "p.cs", type: "script" }));
     store.insertScript(makeScript(fileId, { class_name: "MyMB", is_monobehaviour: true }));

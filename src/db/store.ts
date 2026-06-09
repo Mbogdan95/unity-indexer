@@ -416,8 +416,8 @@ export class Store {
     const params: unknown[] = [];
 
     if (filter?.namespace !== undefined) {
-      conditions.push("namespace = ?");
-      params.push(filter.namespace);
+      conditions.push("(namespace = ? OR namespace LIKE ?)");
+      params.push(filter.namespace, filter.namespace + ".%");
     }
     if (filter?.baseClass !== undefined) {
       conditions.push("base_class = ?");
