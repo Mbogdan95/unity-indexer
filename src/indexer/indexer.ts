@@ -19,7 +19,7 @@ import {
   computeGameObjectImportance,
   computeFileImportance,
 } from "../db/summaries.js";
-import { extractRelationships } from "../parsers/relationship-extractor.js";
+import { extractRelationships, extractTypeReferences } from "../parsers/relationship-extractor.js";
 import { detectFileType } from "../types.js";
 import type {
   ParsedGameObject,
@@ -72,6 +72,16 @@ export class Indexer {
       log(`indexing ${String(scripts.length)} script files...`);
       endPhase = this.benchmark?.startPhase("scripts");
       this.indexBatch(scripts);
+      endPhase?.();
+
+      // Second pass: build cross-script edges now that all scripts are inserted
+      log("building cross-script edges...");
+      endPhase = this.benchmark?.startPhase("script_edges");
+      this.store.transaction(() => {
+        for (const relPath of scripts) {
+          this.indexScriptCrossEdges(relPath);
+        }
+      });
       endPhase?.();
     }
     if (asmdefs.length > 0) {
@@ -523,6 +533,16 @@ export class Indexer {
       }
     }
 
+    // Graph edges: USES from field/param/local type references
+    const typeRefs = extractTypeReferences(content);
+    for (const rel of typeRefs) {
+      const sourceScript = this.store.getScriptByClassName(rel.sourceClassName);
+      const targetScript = this.store.getScriptByClassName(rel.targetClassName);
+      if (sourceScript && targetScript) {
+        this.insertEdge("script", sourceScript.id, "script", targetScript.id, rel.edgeType, fileId);
+      }
+    }
+
     this.store.upsertFile({
       path: relativePath,
       type: "script",
@@ -533,6 +553,45 @@ export class Indexer {
       importance_score: primaryImportance,
       status: "ok",
     });
+  }
+
+  /**
+   * Second-pass: insert CALLS, SUBSCRIBES_TO, and USES edges for a script file.
+   * Must be called after all scripts in the batch have been inserted so that
+   * cross-class lookups (getScriptByClassName) succeed regardless of file order.
+   */
+  private indexScriptCrossEdges(relativePath: string): void {
+    const fullPath = join(this.projectRoot, relativePath);
+    let content: string;
+    try {
+      content = readFileSync(fullPath, "utf8");
+    } catch {
+      return;
+    }
+
+    const fileRow = this.store.getFileByPath(relativePath);
+    if (!fileRow) return;
+    const fileId = fileRow.id;
+
+    // CALLS and SUBSCRIBES_TO edges
+    const relationships = extractRelationships(content);
+    for (const rel of relationships) {
+      const sourceScript = this.store.getScriptByClassName(rel.sourceClassName);
+      const targetScript = this.store.getScriptByClassName(rel.targetClassName);
+      if (sourceScript && targetScript) {
+        this.insertEdge("script", sourceScript.id, "script", targetScript.id, rel.edgeType, fileId);
+      }
+    }
+
+    // USES edges from field/param/local type references
+    const typeRefs = extractTypeReferences(content);
+    for (const rel of typeRefs) {
+      const sourceScript = this.store.getScriptByClassName(rel.sourceClassName);
+      const targetScript = this.store.getScriptByClassName(rel.targetClassName);
+      if (sourceScript && targetScript) {
+        this.insertEdge("script", sourceScript.id, "script", targetScript.id, rel.edgeType, fileId);
+      }
+    }
   }
 
   private indexAsmDef(

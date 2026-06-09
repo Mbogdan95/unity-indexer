@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, beforeAll } from "vitest";
 import { Indexer } from "../../src/indexer/indexer.js";
 import { Store } from "../../src/db/store.js";
 import { initScriptParser } from "../../src/parsers/script-parser.js";
+import { encodeNodeId } from "../../src/types.js";
 import { join } from "path";
 
 const FIXTURES = join(import.meta.dirname, "../fixtures/TestProject");
@@ -84,5 +85,22 @@ describe("Indexer", () => {
     const scripts = store.listScripts();
     const playerControllers = scripts.filter((s) => s.class_name === "PlayerController");
     expect(playerControllers.length).toBe(1);
+  });
+
+  it("indexes USES edges from field type declarations", () => {
+    indexer.indexAll();
+
+    // HealthSystem.cs has: private PlayerController controller;
+    // so HealthSystem USES PlayerController should be in the graph
+    const healthSystem = store.getScriptByClassName("HealthSystem");
+    const playerController = store.getScriptByClassName("PlayerController");
+    expect(healthSystem).toBeDefined();
+    expect(playerController).toBeDefined();
+
+    const hsNodeId = encodeNodeId("script", healthSystem!.id);
+    const pcNodeId = encodeNodeId("script", playerController!.id);
+
+    const outgoing = store.graph.getOutgoing(hsNodeId, ["USES"]);
+    expect(outgoing.some((n) => n.nodeId === pcNodeId)).toBe(true);
   });
 });
