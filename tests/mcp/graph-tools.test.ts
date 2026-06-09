@@ -44,6 +44,12 @@ describe("handleTraceDependencies", () => {
     expect(nodes.length).toBeGreaterThan(0);
     // NEW: every node must have a label field
     expect(nodes.every((n) => typeof n.label === "string")).toBe(true);
+    // NEW: script-type nodes have file_path ending in .cs
+    const scriptNodes = nodes.filter((n) => n.type === "script");
+    expect(scriptNodes.length).toBeGreaterThan(0);
+    expect(
+      scriptNodes.every((n) => typeof n.file_path === "string" && n.file_path.endsWith(".cs")),
+    ).toBe(true);
   });
 
   it("returns error for unknown identifier", () => {

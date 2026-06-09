@@ -9,27 +9,29 @@ function estimateTokens(obj: unknown): number {
   return Math.ceil(JSON.stringify(obj).length / 4);
 }
 
-function resolveNodeLabel(store: Store, nodeId: string): string {
+function resolveNodeInfo(store: Store, nodeId: string): { label: string; file_path?: string } {
   const { type, id } = decodeNodeId(nodeId);
   switch (type) {
     case "script": {
       const script = store.getScriptById(id);
-      return script?.class_name ?? nodeId;
+      if (!script) return { label: nodeId };
+      const file = store.getFileById(script.file_id);
+      return { label: script.class_name, file_path: file?.path };
     }
     case "file": {
       const file = store.getFileById(id);
-      return file?.path ?? nodeId;
+      return { label: file?.path ?? nodeId };
     }
     case "game_object": {
       const go = store.getGameObjectById(id);
-      return go?.name ?? nodeId;
+      return { label: go?.name ?? nodeId };
     }
     case "assembly": {
       const asm = store.getAssemblyById(id);
-      return asm?.name ?? nodeId;
+      return { label: asm?.name ?? nodeId };
     }
     default:
-      return nodeId;
+      return { label: nodeId };
   }
 }
 
@@ -63,12 +65,17 @@ export function handleTraceDependencies(
   const result = store.graph.traceDependencies(nodeId, depth, edgeTypes);
 
   const response = {
-    nodes: result.nodes.map((n) => ({
-      id: n.id,
-      type: decodeNodeId(n.id).type,
-      depth: n.depth,
-      label: resolveNodeLabel(store, n.id),
-    })),
+    nodes: result.nodes.map((n) => {
+      const { type } = decodeNodeId(n.id);
+      const info = resolveNodeInfo(store, n.id);
+      return {
+        id: n.id,
+        type,
+        depth: n.depth,
+        label: info.label,
+        ...(info.file_path !== undefined ? { file_path: info.file_path } : {}),
+      };
+    }),
     edges: result.edges,
     summary: `${params.identifier} has ${String(result.nodes.length - 1)} transitive dependencies across ${String(depth)} levels`,
   };
@@ -87,12 +94,17 @@ export function handleTraceDependents(
   const result = store.graph.traceDependents(nodeId, depth, edgeTypes);
 
   const response = {
-    nodes: result.nodes.map((n) => ({
-      id: n.id,
-      type: decodeNodeId(n.id).type,
-      depth: n.depth,
-      label: resolveNodeLabel(store, n.id),
-    })),
+    nodes: result.nodes.map((n) => {
+      const { type } = decodeNodeId(n.id);
+      const info = resolveNodeInfo(store, n.id);
+      return {
+        id: n.id,
+        type,
+        depth: n.depth,
+        label: info.label,
+        ...(info.file_path !== undefined ? { file_path: info.file_path } : {}),
+      };
+    }),
     edges: result.edges,
     summary: `${String(result.nodes.length - 1)} things depend on ${params.identifier} within ${String(depth)} levels`,
   };
@@ -119,11 +131,16 @@ export function handleFindPath(
   }
 
   const response = {
-    path: result.nodes.map((nodeId) => ({
-      id: nodeId,
-      type: decodeNodeId(nodeId).type,
-      label: resolveNodeLabel(store, nodeId),
-    })),
+    path: result.nodes.map((nodeId) => {
+      const { type } = decodeNodeId(nodeId);
+      const info = resolveNodeInfo(store, nodeId);
+      return {
+        id: nodeId,
+        type,
+        label: info.label,
+        ...(info.file_path !== undefined ? { file_path: info.file_path } : {}),
+      };
+    }),
     edges: result.edges,
     summary: `Path of length ${String(result.nodes.length - 1)} from ${params.from} to ${params.to}`,
   };
@@ -142,12 +159,17 @@ export function handleGetSubgraph(
   const result = store.graph.getSubgraph(nodeId, radius, edgeTypes);
 
   const response = {
-    nodes: result.nodes.map((n) => ({
-      id: n.id,
-      type: decodeNodeId(n.id).type,
-      depth: n.depth,
-      label: resolveNodeLabel(store, n.id),
-    })),
+    nodes: result.nodes.map((n) => {
+      const { type } = decodeNodeId(n.id);
+      const info = resolveNodeInfo(store, n.id);
+      return {
+        id: n.id,
+        type,
+        depth: n.depth,
+        label: info.label,
+        ...(info.file_path !== undefined ? { file_path: info.file_path } : {}),
+      };
+    }),
     edges: result.edges,
     summary: `${String(result.nodes.length)} nodes within radius ${String(radius)} of ${params.identifier}`,
   };
