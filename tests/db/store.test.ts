@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll } from "vitest";
 import { Store } from "../../src/db/store.js";
+import { Indexer } from "../../src/indexer/indexer.js";
 import { join } from "path";
 import { initScriptParser } from "../../src/parsers/script-parser.js";
 import type {
@@ -226,8 +227,7 @@ describe("Store - scripts", () => {
     expect(store.getScriptByFileId(fileId)).toBeUndefined();
   });
 
-  it("getScriptById returns script row", async () => {
-    const { Indexer } = await import("../../src/indexer/indexer.js");
+  it("getScriptById returns script row", () => {
     const indexer = new Indexer(store, FIXTURES);
     indexer.indexAll();
     const pc = store.getScriptByClassName("PlayerController");

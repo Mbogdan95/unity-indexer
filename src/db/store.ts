@@ -613,6 +613,14 @@ export class Store {
     }));
   }
 
+  getAssemblyById(id: number): { id: number; name: string; path: string } | undefined {
+    const row = this.prepare("SELECT * FROM assemblies WHERE id = ? LIMIT 1").get(id) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) return undefined;
+    return { id: row.id as number, name: row.name as string, path: row.path as string };
+  }
+
   insertAssembly(asm: AssemblyRow): number {
     const stmt = this.prepare(`
       INSERT INTO assemblies

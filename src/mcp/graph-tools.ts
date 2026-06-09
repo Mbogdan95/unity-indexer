@@ -25,8 +25,7 @@ function resolveNodeLabel(store: Store, nodeId: string): string {
       return go?.name ?? nodeId;
     }
     case "assembly": {
-      const asms = store.listAssemblies();
-      const asm = asms.find((a) => a.id === id);
+      const asm = store.getAssemblyById(id);
       return asm?.name ?? nodeId;
     }
     default:

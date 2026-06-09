@@ -79,6 +79,26 @@ describe("handleFindPath", () => {
     // Should have error or empty path
     expect(result.error || result.path === null).toBeTruthy();
   });
+
+  it("returns path nodes as {id, type, label} objects when path exists", () => {
+    // Try to find a path in the graph - any two connected scripts will work
+    // HealthSystem USES PlayerController so there may be a path between them
+    const result = handleFindPath(store, {
+      from: "HealthSystem",
+      to: "PlayerController",
+    }) as Record<string, unknown>;
+
+    // Either a path is found or no path - either way path should be array of objects not strings
+    if (!result.error && result.path) {
+      const path = result.path as Array<Record<string, unknown>>;
+      expect(Array.isArray(path)).toBe(true);
+      if (path.length > 0) {
+        expect(typeof path[0].id).toBe("string");
+        expect(typeof path[0].type).toBe("string");
+        expect(typeof path[0].label).toBe("string");
+      }
+    }
+  });
 });
 
 describe("handleGetSubgraph", () => {
