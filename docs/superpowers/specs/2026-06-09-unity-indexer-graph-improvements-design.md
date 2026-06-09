@@ -167,10 +167,9 @@ Location: `src/mcp/graph-tools.ts`
 
 1. Look up: `store.getScriptByClassName(interface_name)`
 2. Not found → `{ error: "Script not found: IMyInterface" }`
-3. Wrong kind → `{ error: "SceneController is not an interface" }` (checks `script.kind === "interface"`)
-4. Get incoming edges: `store.graph.getIncoming(nodeId, ["IMPLEMENTS"])`
-5. Resolve each node to full script row, join with file path
-6. Return:
+3. Get incoming edges: `store.graph.getIncoming(nodeId, ["IMPLEMENTS"])`
+4. Resolve each node to full script row, join with file path
+5. Return:
 
 ```json
 {
