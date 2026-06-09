@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Store } from "../db/store.js";
-import { encodeNodeId, decodeNodeId } from "../types.js";
+import { encodeNodeId, decodeNodeId, type ScriptRow } from "../types.js";
 
 export type StoreResolver = (projectName?: string) => Store;
 
@@ -227,7 +227,13 @@ function resolveScriptNodeId(store: Store, nodeId: string): string {
 }
 
 export function handleGetScriptDetail(store: Store, params: { class_name: string }): object {
-  const script = store.getScriptByClassName(params.class_name);
+  let script: (ScriptRow & { id: number }) | undefined;
+  if (params.class_name.startsWith("script:")) {
+    const { type, id } = decodeNodeId(params.class_name);
+    if (type === "script") script = store.getScriptById(id);
+  } else {
+    script = store.getScriptByClassName(params.class_name);
+  }
   if (!script) {
     return { token_hint: 10, error: `Script not found: ${params.class_name}` };
   }
@@ -680,7 +686,8 @@ export function registerTools(server: McpServer, resolveStore: StoreResolver): v
   server.registerTool(
     "get_script_detail",
     {
-      description: "Get detailed info about a C# class including all members.",
+      description:
+        "Get detailed info about a C# class including all members. Accepts both class name ('PlayerController') and node ID ('script:42') formats.",
       inputSchema: {
         class_name: z.string().describe("C# class name"),
         project: z

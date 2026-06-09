@@ -179,6 +179,16 @@ describe("handleGetScriptDetail", () => {
     const usedBy = rels.used_by as string[];
     expect(usedBy).toContain("HealthSystem");
   });
+
+  it("accepts script:N node ID format", () => {
+    const pc = store.getScriptByClassName("PlayerController");
+    expect(pc).toBeDefined();
+    const nodeId = `script:${String(pc!.id)}`;
+
+    const result = handleGetScriptDetail(store, { class_name: nodeId }) as Record<string, unknown>;
+    expect(result.error).toBeUndefined();
+    expect(result.class_name).toBe("PlayerController");
+  });
 });
 
 describe("handleFindReferences", () => {
