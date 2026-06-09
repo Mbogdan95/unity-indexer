@@ -145,6 +145,11 @@ export class Indexer {
     this.store.transaction(() => {
       this.indexFileInternal(relativePath);
     });
+    if (relativePath.endsWith(".cs")) {
+      this.store.transaction(() => {
+        this.indexScriptCrossEdges(relativePath);
+      });
+    }
     this.store.recomputeReferenceCounts();
     this.store.hydrateGraph();
     this.updateProjectSummary();
@@ -520,26 +525,6 @@ export class Indexer {
         if (ifaceScript) {
           this.insertEdge("script", scriptId, "script", ifaceScript.id, "IMPLEMENTS", fileId);
         }
-      }
-    }
-
-    // Graph edges: CALLS and SUBSCRIBES_TO from AST analysis
-    const relationships = extractRelationships(content);
-    for (const rel of relationships) {
-      const sourceScript = this.store.getScriptByClassName(rel.sourceClassName);
-      const targetScript = this.store.getScriptByClassName(rel.targetClassName);
-      if (sourceScript && targetScript) {
-        this.insertEdge("script", sourceScript.id, "script", targetScript.id, rel.edgeType, fileId);
-      }
-    }
-
-    // Graph edges: USES from field/param/local type references
-    const typeRefs = extractTypeReferences(content);
-    for (const rel of typeRefs) {
-      const sourceScript = this.store.getScriptByClassName(rel.sourceClassName);
-      const targetScript = this.store.getScriptByClassName(rel.targetClassName);
-      if (sourceScript && targetScript) {
-        this.insertEdge("script", sourceScript.id, "script", targetScript.id, rel.edgeType, fileId);
       }
     }
 
