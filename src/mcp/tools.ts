@@ -2,8 +2,6 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Store } from "../db/store.js";
 import { encodeNodeId, decodeNodeId, type ScriptRow } from "../types.js";
-import { readFileSync } from "fs";
-import { join } from "path";
 
 export type StoreResolver = (projectName?: string) => Store;
 
@@ -228,10 +226,7 @@ function resolveScriptNodeId(store: Store, nodeId: string): string {
   return script?.class_name ?? nodeId;
 }
 
-export function handleGetScriptDetail(
-  store: Store,
-  params: { class_name: string; include_bodies?: boolean },
-): object {
+export function handleGetScriptDetail(store: Store, params: { class_name: string }): object {
   let script: (ScriptRow & { id: number }) | undefined;
   if (params.class_name.startsWith("script:")) {
     const { type, id } = decodeNodeId(params.class_name);
@@ -245,18 +240,6 @@ export function handleGetScriptDetail(
 
   const members = store.getScriptMembers(script.id);
   const file = store.getFileById(script.file_id);
-
-  let fileLines: string[] | null = null;
-  if (params.include_bodies === true) {
-    const rootPath = store.getProjectRootPath();
-    if (rootPath.length > 0 && file && file.path) {
-      try {
-        fileLines = readFileSync(join(rootPath, file.path), "utf-8").split("\n");
-      } catch {
-        // file unreadable — skip bodies silently
-      }
-    }
-  }
 
   const response = {
     class_name: script.class_name,
@@ -273,19 +256,15 @@ export function handleGetScriptDetail(
     file_path: file?.path ?? "",
     members: members.map((m) => {
       const attrs = JSON.parse(m.attributes) as string[];
-      const base = {
+      return {
         name: m.name,
         kind: m.kind,
         ...(m.access !== "public" ? { access: m.access } : {}),
         signature: m.signature,
         ...(attrs.length > 0 ? { attributes: attrs } : {}),
         ...(m.has_serialize_field ? { has_serialize_field: true } : {}),
+        ...(m.start_line > 0 ? { start_line: m.start_line, end_line: m.end_line } : {}),
       };
-      if (fileLines !== null && m.start_line > 0 && m.end_line > 0) {
-        const body = fileLines.slice(m.start_line - 1, m.end_line).join("\n");
-        return { ...base, body };
-      }
-      return base;
     }),
   };
 
@@ -596,14 +575,11 @@ export function handleRecentChanges(
 
 export function handleBatchGetScriptDetail(
   store: Store,
-  params: { class_names: string[]; include_bodies?: boolean },
+  params: { class_names: string[] },
 ): object {
   const results = params.class_names.map((name) => ({
     class_name: name,
-    detail: handleGetScriptDetail(store, {
-      class_name: name,
-      include_bodies: params.include_bodies,
-    }),
+    detail: handleGetScriptDetail(store, { class_name: name }),
   }));
   return { token_hint: estimateTokens(results), results };
 }
@@ -723,15 +699,11 @@ export function registerTools(server: McpServer, resolveStore: StoreResolver): v
     "get_script_detail",
     {
       description:
-        "Get detailed info about a C# class including all members. Accepts both class name ('PlayerController') and node ID ('script:42') formats.",
+        "Get detailed info about a C# class: members with signatures and line numbers, relationships (callers/callees/implementors), and file_path. " +
+        "Accepts class name ('PlayerController') or node ID ('script:42'). " +
+        "Use file_path + start_line/end_line with Read to fetch method bodies.",
       inputSchema: {
-        class_name: z.string().describe("C# class name"),
-        include_bodies: z
-          .boolean()
-          .optional()
-          .describe(
-            "If true, include full source body for each member. Requires re-indexing if database predates this feature.",
-          ),
+        class_name: z.string().describe("C# class name or script:N node ID"),
         project: z
           .string()
           .optional()
@@ -753,10 +725,6 @@ export function registerTools(server: McpServer, resolveStore: StoreResolver): v
           .describe(
             "Array of class names or script:N node IDs (e.g. ['PlayerController', 'HealthSystem'])",
           ),
-        include_bodies: z
-          .boolean()
-          .optional()
-          .describe("If true, include full source body for each member"),
         project: z
           .string()
           .optional()
