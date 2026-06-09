@@ -149,6 +149,7 @@ const CS_PRIMITIVE_KEYWORDS = new Set([
   "object",
   "var",
   "uint",
+  "ulong",
   "ushort",
   "short",
   "sbyte",
