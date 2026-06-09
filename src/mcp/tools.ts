@@ -407,8 +407,8 @@ export function handleFindReferences(
         ref_type: r.ref_type,
       };
     }),
-    total: refs.length,
-    ...(codeRefs.length > 0 ? { code_references: codeRefs, code_total: codeRefs.length } : {}),
+    total: refs.length + codeRefs.length,
+    ...(codeRefs.length > 0 ? { code_references: codeRefs } : {}),
   };
   return { token_hint: estimateTokens(response), ...response };
 }

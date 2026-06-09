@@ -1,5 +1,5 @@
 import { existsSync, unlinkSync } from "fs";
-import { basename, join, relative } from "path";
+import { basename, join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { Store } from "../db/store.js";
@@ -75,7 +75,7 @@ export async function startServer(rootDir: string): Promise<void> {
 
     try {
       const store = new Store(dbPath);
-      store.setPathPrefix(relative(rootDir, projectRoot));
+      store.setPathPrefix(projectRoot);
       const indexer = new Indexer(store, projectRoot);
       const watcher = new FileWatcher(indexer, projectRoot);
       projects.set(name, { name, projectRoot, store, indexer, watcher });
