@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Store } from "../db/store.js";
-import { encodeNodeId } from "../types.js";
+import { encodeNodeId, decodeNodeId } from "../types.js";
 
 export type StoreResolver = (projectName?: string) => Store;
 
@@ -219,6 +219,13 @@ export function handleGetComponent(
   return { token_hint: estimateTokens(response), ...response };
 }
 
+function resolveScriptNodeId(store: Store, nodeId: string): string {
+  const { type, id } = decodeNodeId(nodeId);
+  if (type !== "script") return nodeId;
+  const script = store.getScriptById(id);
+  return script?.class_name ?? nodeId;
+}
+
 export function handleGetScriptDetail(store: Store, params: { class_name: string }): object {
   const script = store.getScriptByClassName(params.class_name);
   if (!script) {
@@ -226,6 +233,7 @@ export function handleGetScriptDetail(store: Store, params: { class_name: string
   }
 
   const members = store.getScriptMembers(script.id);
+  const file = store.getFileById(script.file_id);
 
   const response = {
     class_name: script.class_name,
@@ -239,6 +247,7 @@ export function handleGetScriptDetail(store: Store, params: { class_name: string
     ...(script.is_scriptable_object ? { is_scriptable_object: true } : {}),
     ...(script.is_generated ? { is_generated: true } : {}),
     complexity: script.complexity_score,
+    file_path: file?.path ?? "",
     members: members.map((m) => {
       const attrs = JSON.parse(m.attributes) as string[];
       return {
@@ -257,10 +266,21 @@ export function handleGetScriptDetail(store: Store, params: { class_name: string
   const incoming = store.graph.getIncoming(scriptNodeId);
 
   const relationships = {
-    inherits: outgoing.filter((n) => n.edgeType === "INHERITS").map((n) => n.nodeId),
-    implements: outgoing.filter((n) => n.edgeType === "IMPLEMENTS").map((n) => n.nodeId),
-    callees: outgoing.filter((n) => n.edgeType === "CALLS").map((n) => n.nodeId),
-    callers: incoming.filter((n) => n.edgeType === "CALLS").map((n) => n.nodeId),
+    inherits: outgoing
+      .filter((n) => n.edgeType === "INHERITS")
+      .map((n) => resolveScriptNodeId(store, n.nodeId)),
+    implements: outgoing
+      .filter((n) => n.edgeType === "IMPLEMENTS")
+      .map((n) => resolveScriptNodeId(store, n.nodeId)),
+    callees: outgoing
+      .filter((n) => n.edgeType === "CALLS")
+      .map((n) => resolveScriptNodeId(store, n.nodeId)),
+    callers: incoming
+      .filter((n) => n.edgeType === "CALLS")
+      .map((n) => resolveScriptNodeId(store, n.nodeId)),
+    used_by: incoming
+      .filter((n) => n.edgeType === "USES")
+      .map((n) => resolveScriptNodeId(store, n.nodeId)),
   };
 
   return { token_hint: estimateTokens({ ...response, relationships }), ...response, relationships };

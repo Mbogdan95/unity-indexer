@@ -130,7 +130,6 @@ describe("handleGetScriptDetail", () => {
       string,
       unknown
     >;
-
     expect(result.class_name).toBe("PlayerController");
     expect(result.members).toBeDefined();
     const members = result.members as Array<Record<string, unknown>>;
@@ -146,17 +145,39 @@ describe("handleGetScriptDetail", () => {
     expect(result.error).toBeDefined();
   });
 
-  it("includes relationships from graph", () => {
+  it("includes file_path in response", () => {
     const result = handleGetScriptDetail(store, { class_name: "PlayerController" }) as Record<
       string,
       unknown
     >;
-    expect(result.relationships).toBeDefined();
+    expect(typeof result.file_path).toBe("string");
+    expect((result.file_path as string).endsWith(".cs")).toBe(true);
+  });
+
+  it("relationships use class names not raw node IDs", () => {
+    const result = handleGetScriptDetail(store, { class_name: "PlayerController" }) as Record<
+      string,
+      unknown
+    >;
     const rels = result.relationships as Record<string, unknown>;
-    expect(rels).toHaveProperty("inherits");
-    expect(rels).toHaveProperty("implements");
-    expect(rels).toHaveProperty("callers");
-    expect(rels).toHaveProperty("callees");
+    // implements should be class names like "IDamageable", not "script:N"
+    const implementsArr = rels.implements as string[];
+    expect(implementsArr.length).toBeGreaterThan(0);
+    expect(implementsArr.every((s) => !s.startsWith("script:"))).toBe(true);
+    expect(implementsArr).toContain("IDamageable");
+  });
+
+  it("includes used_by array in relationships", () => {
+    // HealthSystem has: private PlayerController controller;
+    // so PlayerController.relationships.used_by should include HealthSystem
+    const result = handleGetScriptDetail(store, { class_name: "PlayerController" }) as Record<
+      string,
+      unknown
+    >;
+    const rels = result.relationships as Record<string, unknown>;
+    expect(rels).toHaveProperty("used_by");
+    const usedBy = rels.used_by as string[];
+    expect(usedBy).toContain("HealthSystem");
   });
 });
 
