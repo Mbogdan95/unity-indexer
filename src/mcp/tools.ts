@@ -12,7 +12,7 @@ function estimateTokens(obj: unknown): number {
 function resolveToNodeId(store: Store, identifier: string): string | null {
   const script = store.getScriptByClassName(identifier);
   if (script) return encodeNodeId("script", script.id);
-  const file = store.getFileByPath(identifier);
+  const file = store.getFileByPath(store.stripPrefix(identifier));
   if (file) return encodeNodeId("file", file.id);
   if (identifier.includes(":")) return identifier;
   return null;
@@ -26,7 +26,7 @@ export function handleGetSceneHierarchy(
   store: Store,
   params: { scene: string; depth?: number; filter?: string },
 ): object {
-  const file = store.getFileByPath(params.scene);
+  const file = store.getFileByPath(store.stripPrefix(params.scene));
   if (!file) return { token_hint: 10, error: `File not found: ${params.scene}` };
 
   let allGOs = store.getGameObjectsByFile(file.id);
@@ -37,7 +37,7 @@ export function handleGetSceneHierarchy(
     if (baseFileId !== null) {
       allGOs = store.getGameObjectsByFile(baseFileId);
       const baseFile = store.getFileById(baseFileId);
-      resolvedFrom = baseFile?.path;
+      resolvedFrom = baseFile ? store.prefixPath(baseFile.path) : undefined;
     }
   }
 
@@ -125,7 +125,7 @@ export function handleListAssets(store: Store, params: { type?: string }): objec
 
   const response = {
     assets: filtered.map((f) => ({
-      path: f.path,
+      path: store.prefixPath(f.path),
       summary: f.summary_line,
     })),
     total: filtered.length,
@@ -137,7 +137,7 @@ export function handleGetGameObject(
   store: Store,
   params: { scene: string; name_or_id: string },
 ): object {
-  const file = store.getFileByPath(params.scene);
+  const file = store.getFileByPath(store.stripPrefix(params.scene));
   if (!file) return { token_hint: 10, error: `File not found: ${params.scene}` };
 
   let go = store.getGameObjectByName(file.id, params.name_or_id);
@@ -148,7 +148,7 @@ export function handleGetGameObject(
     if (baseFileId !== null) {
       go = store.getGameObjectByName(baseFileId, params.name_or_id);
       const baseFile = store.getFileById(baseFileId);
-      resolvedFrom = baseFile?.path;
+      resolvedFrom = baseFile ? store.prefixPath(baseFile.path) : undefined;
     }
   }
 
@@ -179,7 +179,7 @@ export function handleGetComponent(
   store: Store,
   params: { scene: string; game_object: string; component_type: string },
 ): object {
-  const file = store.getFileByPath(params.scene);
+  const file = store.getFileByPath(store.stripPrefix(params.scene));
   if (!file) return { token_hint: 10, error: `File not found: ${params.scene}` };
 
   let go = store.getGameObjectByName(file.id, params.game_object);
@@ -190,7 +190,7 @@ export function handleGetComponent(
     if (baseFileId !== null) {
       go = store.getGameObjectByName(baseFileId, params.game_object);
       const baseFile = store.getFileById(baseFileId);
-      resolvedFrom = baseFile?.path;
+      resolvedFrom = baseFile ? store.prefixPath(baseFile.path) : undefined;
     }
   }
 
@@ -253,7 +253,7 @@ export function handleGetScriptDetail(store: Store, params: { class_name: string
     ...(script.is_scriptable_object ? { is_scriptable_object: true } : {}),
     ...(script.is_generated ? { is_generated: true } : {}),
     complexity: script.complexity_score,
-    file_path: file?.path ?? "",
+    file_path: store.prefixPath(file?.path ?? ""),
     members: members.map((m) => {
       const attrs = JSON.parse(m.attributes) as string[];
       return {
@@ -390,7 +390,7 @@ export function handleFindReferences(
       codeRefs.push({
         class_name: src.class_name,
         edge_type: n.edgeType,
-        ...(srcFile ? { file_path: srcFile.path } : {}),
+        ...(srcFile ? { file_path: store.prefixPath(srcFile.path) } : {}),
       });
     }
   }
@@ -400,7 +400,9 @@ export function handleFindReferences(
     references: refs.map((r) => {
       const sourceFile = store.getFileById(r.source_file_id);
       return {
-        source_file: sourceFile?.path ?? `file_id:${String(r.source_file_id)}`,
+        source_file: sourceFile
+          ? store.prefixPath(sourceFile.path)
+          : `file_id:${String(r.source_file_id)}`,
         context: r.source_context,
         ref_type: r.ref_type,
       };
@@ -430,8 +432,8 @@ export function handleFindDependencies(
 
   let fileId: number | null = null;
 
-  // Try to find by path first
-  const fileByPath = store.getFileByPath(params.guid_or_name);
+  // Try to find by path first (strip prefix if agent passed a prefixed path)
+  const fileByPath = store.getFileByPath(store.stripPrefix(params.guid_or_name));
   if (fileByPath) {
     fileId = fileByPath.id;
   } else {
@@ -460,7 +462,7 @@ export function handleFindDependencies(
       const targetFile = r.target_file_id !== null ? store.getFileById(r.target_file_id) : null;
       return {
         target_guid: r.target_guid,
-        target_file: targetFile?.path ?? null,
+        target_file: targetFile ? store.prefixPath(targetFile.path) : null,
         context: r.source_context,
         ref_type: r.ref_type,
       };
@@ -483,7 +485,7 @@ export function handleResolveGuid(store: Store, params: { guid: string }): objec
   }
   const response = {
     guid: guidRow.guid,
-    path,
+    path: path !== null ? store.prefixPath(path) : null,
     asset_type: guidRow.asset_type,
   };
   return { token_hint: estimateTokens(response), ...response };
@@ -503,7 +505,7 @@ export function handleSearch(
 
       if (r.type === "file") {
         const file = store.getFileById(r.id);
-        path = file?.path;
+        path = file ? store.prefixPath(file.path) : undefined;
         summary = file?.summary_line;
       } else if (r.type === "game_object") {
         // label is the GO name
@@ -535,7 +537,7 @@ export function handleFindComponents(
   let fileId: number | undefined;
 
   if (params.scene !== undefined) {
-    const file = store.getFileByPath(params.scene);
+    const file = store.getFileByPath(store.stripPrefix(params.scene));
     if (!file) return { token_hint: 10, error: `File not found: ${params.scene}` };
     fileId = file.id;
   }
@@ -589,7 +591,7 @@ export function handleRecentChanges(
 
   const response = {
     changes: filtered.map((c) => ({
-      path: c.path,
+      path: store.prefixPath(c.path),
       change_type: c.change_type,
       changed_at: c.changed_at,
     })),

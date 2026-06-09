@@ -96,8 +96,27 @@ function memberRowOut(row: Record<string, unknown>): ScriptMemberRow & { id: num
 export class Store {
   private db: DatabaseType;
   private stmtCache = new Map<string, Statement>();
+  private pathPrefix: string = "";
 
   public readonly graph = new GraphManager();
+
+  /** Set once at server startup: relative path from MCP rootDir to projectRoot (e.g. "MyGame"). */
+  setPathPrefix(prefix: string): void {
+    this.pathPrefix = prefix;
+  }
+
+  /** Prepend project prefix to a DB-relative path for external consumption. */
+  prefixPath(p: string): string {
+    if (!p || !this.pathPrefix) return p;
+    return `${this.pathPrefix}/${p}`;
+  }
+
+  /** Strip project prefix from an agent-provided path before a DB lookup. */
+  stripPrefix(p: string): string {
+    if (!p || !this.pathPrefix) return p;
+    const pfx = `${this.pathPrefix}/`;
+    return p.startsWith(pfx) ? p.slice(pfx.length) : p;
+  }
 
   hydrateGraph(): void {
     this.graph.hydrate(this.getAllGraphEdges());

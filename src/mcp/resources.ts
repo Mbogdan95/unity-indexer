@@ -27,7 +27,7 @@ export function getProjectFiles(store: Store, cursor?: string): object {
   return {
     token_hint: page.length * 3,
     files: page.map((f) => ({
-      path: f.path,
+      path: store.prefixPath(f.path),
       type: f.type,
       summary: f.summary_line,
       importance: f.importance_score,

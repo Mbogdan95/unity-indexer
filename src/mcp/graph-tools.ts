@@ -16,11 +16,14 @@ function resolveNodeInfo(store: Store, nodeId: string): { label: string; file_pa
       const script = store.getScriptById(id);
       if (!script) return { label: nodeId };
       const file = store.getFileById(script.file_id);
-      return { label: script.class_name, file_path: file?.path };
+      return {
+        label: script.class_name,
+        file_path: file ? store.prefixPath(file.path) : undefined,
+      };
     }
     case "file": {
       const file = store.getFileById(id);
-      return { label: file?.path ?? nodeId };
+      return { label: file ? store.prefixPath(file.path) : nodeId };
     }
     case "game_object": {
       const go = store.getGameObjectById(id);
@@ -40,8 +43,8 @@ function resolveIdentifier(store: Store, identifier: string): string | null {
   const script = store.getScriptByClassName(identifier);
   if (script) return encodeNodeId("script", script.id);
 
-  // 2. Try as file path
-  const file = store.getFileByPath(identifier);
+  // 2. Try as file path (strip prefix if agent passed a prefixed path)
+  const file = store.getFileByPath(store.stripPrefix(identifier));
   if (file) return encodeNodeId("file", file.id);
 
   // 3. Try as literal node ID (e.g., "script:42")
@@ -239,7 +242,7 @@ export function handleFindImplementors(store: Store, params: { interface_name: s
       const file = store.getFileById(implScript.file_id);
       return {
         class_name: implScript.class_name,
-        file_path: file?.path ?? "",
+        file_path: store.prefixPath(file?.path ?? ""),
         ...(implScript.namespace ? { namespace: implScript.namespace } : {}),
       };
     })
