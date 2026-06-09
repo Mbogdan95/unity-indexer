@@ -182,19 +182,28 @@ export async function startServer(rootDir: string): Promise<void> {
   await server.connect(transport);
   log("MCP server connected — indexing projects...");
 
-  // Phase 2: index and start watchers (may take a while on large projects)
+  // Phase 2: index scripts/assets synchronously, then scenes/prefabs in background
   for (const { name, indexer, store } of toIndex) {
     try {
-      log(`[${name}] indexing...`);
+      log(`[${name}] indexing scripts and assets...`);
       const start = Date.now();
-      indexer.indexAll();
-      const summary = store.getProjectSummary();
+      indexer.indexEssential();
       const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+      const summary = store.getProjectSummary();
       log(
-        `[${name}] indexed in ${elapsed}s — ${String(summary.scene_count)} scenes, ${String(summary.prefab_count)} prefabs, ${String(summary.script_count)} scripts`,
+        `[${name}] scripts ready in ${elapsed}s — ${String(summary.script_count)} scripts, ${String(summary.scene_count)} scenes, ${String(summary.prefab_count)} prefabs`,
       );
+
       projects.get(name)?.watcher.start();
       log(`[${name}] file watcher started`);
+
+      // Index scenes/prefabs in background — yields between batches so MCP stays responsive
+      void indexer.indexScenesAndPrefabsBackground().then(() => {
+        const s = store.getProjectSummary();
+        log(
+          `[${name}] background index complete — ${String(s.scene_count)} scenes, ${String(s.prefab_count)} prefabs`,
+        );
+      });
     } catch (err) {
       log(`[${name}] indexing failed: ${String(err)}`);
     }

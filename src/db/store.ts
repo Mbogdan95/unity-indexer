@@ -115,6 +115,9 @@ export class Store {
   constructor(dbPath: string) {
     this.db = new Database(dbPath);
     this.db.pragma("journal_mode = WAL");
+    this.db.pragma("synchronous = NORMAL"); // safe with WAL; ~10x faster commits
+    this.db.pragma("cache_size = -65536"); // 64 MB page cache
+    this.db.pragma("temp_store = MEMORY");
     this.db.pragma("foreign_keys = ON");
     this.db.exec(SCHEMA_SQL);
   }

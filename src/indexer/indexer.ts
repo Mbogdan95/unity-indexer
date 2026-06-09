@@ -34,6 +34,7 @@ function log(msg: string): void {
 
 export class Indexer {
   private guidToClassCache: Map<string, string> | null = null;
+  private pendingScenesAndPrefabs: string[] = [];
 
   constructor(
     private store: Store,
@@ -127,6 +128,114 @@ export class Indexer {
     endPhase?.();
   }
 
+  /**
+   * Index everything except scenes/prefabs, then return.
+   * Call indexScenesAndPrefabsBackground() to finish in the background.
+   * Useful for server startup: scripts are available to MCP tools immediately.
+   */
+  indexEssential(): void {
+    const files = this.collectFiles();
+    log(`found ${String(files.length)} files to index`);
+
+    const metaFiles = files.filter((f) => f.endsWith(".meta"));
+    const otherFiles = files.filter((f) => !f.endsWith(".meta"));
+    const scripts = otherFiles.filter((f) => f.endsWith(".cs"));
+    const asmdefs = otherFiles.filter((f) => f.endsWith(".asmdef"));
+    const assets = otherFiles.filter((f) => f.endsWith(".asset"));
+
+    this.pendingScenesAndPrefabs = otherFiles.filter(
+      (f) => f.endsWith(".unity") || f.endsWith(".prefab"),
+    );
+
+    let endPhase: (() => void) | undefined;
+
+    if (metaFiles.length > 0) {
+      log(`indexing ${String(metaFiles.length)} meta files...`);
+      endPhase = this.benchmark?.startPhase("meta");
+      this.indexBatch(metaFiles);
+      endPhase?.();
+    }
+
+    if (scripts.length > 0) {
+      log(`indexing ${String(scripts.length)} script files...`);
+      endPhase = this.benchmark?.startPhase("scripts");
+      this.indexBatch(scripts);
+      endPhase?.();
+
+      log("building cross-script edges...");
+      endPhase = this.benchmark?.startPhase("script_edges");
+      this.store.transaction(() => {
+        for (const relPath of scripts) {
+          this.indexScriptCrossEdges(relPath);
+        }
+      });
+      endPhase?.();
+    }
+
+    if (asmdefs.length > 0) {
+      log(`indexing ${String(asmdefs.length)} asmdef files...`);
+      endPhase = this.benchmark?.startPhase("asmdefs");
+      this.indexBatch(asmdefs);
+      endPhase?.();
+    }
+
+    if (assets.length > 0) {
+      log(`indexing ${String(assets.length)} asset files...`);
+      endPhase = this.benchmark?.startPhase("assets");
+      this.indexBatch(assets);
+      endPhase?.();
+    }
+
+    log("building GUID → class map...");
+    this.guidToClassCache = this.buildGuidToClassMap();
+    // Keep guidToClassCache alive for the background scenes/prefabs pass
+
+    log("recomputing reference counts...");
+    this.store.recomputeReferenceCounts();
+
+    log("hydrating graph...");
+    this.store.hydrateGraph();
+
+    this.updateProjectSummary();
+  }
+
+  /**
+   * Index scenes/prefabs in the background, yielding between batches so the
+   * event loop can process MCP messages between chunks.
+   * Must be called after indexEssential().
+   */
+  async indexScenesAndPrefabsBackground(): Promise<void> {
+    const files = this.pendingScenesAndPrefabs;
+    this.pendingScenesAndPrefabs = [];
+
+    if (files.length === 0) {
+      this.guidToClassCache = null;
+      return;
+    }
+
+    log(`indexing ${String(files.length)} scene/prefab files in background...`);
+    const batchSize = 500;
+
+    for (let i = 0; i < files.length; i += batchSize) {
+      const batch = files.slice(i, i + batchSize);
+      // Yield to allow MCP messages to be processed between batches
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      this.store.transaction(() => {
+        for (const relPath of batch) {
+          this.indexFileInternal(relPath);
+        }
+      });
+      if (files.length > batchSize) {
+        log(`  ${String(Math.min(i + batchSize, files.length))}/${String(files.length)}`);
+      }
+    }
+
+    this.guidToClassCache = null;
+    this.store.recomputeReferenceCounts();
+    this.store.hydrateGraph();
+    this.updateProjectSummary();
+  }
+
   private indexBatch(files: string[], batchSize = 500): void {
     for (let i = 0; i < files.length; i += batchSize) {
       const batch = files.slice(i, i + batchSize);
@@ -205,6 +314,18 @@ export class Indexer {
   private indexFileInternal(relativePath: string): void {
     const fullPath = join(this.projectRoot, relativePath);
 
+    // Fast path: stat + mtime check before reading the file
+    const existing = this.store.getFileByPath(relativePath);
+    let mtime: string | undefined;
+    if (existing) {
+      try {
+        mtime = statSync(fullPath).mtime.toISOString();
+        if (existing.modified_at === mtime) return;
+      } catch {
+        // stat failed — fall through to normal read
+      }
+    }
+
     // Read file content
     let content: string;
     try {
@@ -226,7 +347,7 @@ export class Indexer {
         path: relativePath,
         type: fileType,
         content_hash: "",
-        modified_at: this.getModifiedTime(fullPath),
+        modified_at: mtime ?? this.getModifiedTime(fullPath),
         indexed_at: new Date().toISOString(),
         summary_line: basename(relativePath),
         importance_score: 0,
@@ -238,15 +359,13 @@ export class Indexer {
     // Compute content hash
     const contentHash = createHash("sha256").update(content).digest("hex");
 
-    // Check if file changed
-    const existing = this.store.getFileByPath(relativePath);
+    // Secondary guard: hash check catches content changes without mtime change
     if (existing && existing.content_hash === contentHash) {
-      // Unchanged — skip
       return;
     }
 
     // Upsert the file row (initially with minimal data)
-    const modifiedAt = this.getModifiedTime(fullPath);
+    const modifiedAt = mtime ?? this.getModifiedTime(fullPath);
     const changeType = existing ? "modified" : "added";
 
     const fileId = this.store.upsertFile({
