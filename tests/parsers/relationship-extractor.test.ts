@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { initScriptParser } from "../../src/parsers/script-parser.js";
-import { extractRelationships } from "../../src/parsers/relationship-extractor.js";
+import {
+  extractRelationships,
+  extractTypeReferences,
+} from "../../src/parsers/relationship-extractor.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -72,5 +75,119 @@ describe("extractRelationships", () => {
     const rels = extractRelationships(content);
     const healthRels = rels.filter((r) => r.sourceClassName === "HealthSystem");
     expect(healthRels.length).toBeGreaterThan(0);
+  });
+});
+
+describe("extractTypeReferences", () => {
+  it("extracts field type references as USES edges", () => {
+    // HealthSystem.cs has: private PlayerController controller;
+    const content = readFileSync(join(FIXTURES, "Scripts/HealthSystem.cs"), "utf-8");
+    const refs = extractTypeReferences(content);
+    const fieldRefs = refs.filter(
+      (r) =>
+        r.edgeType === "USES" &&
+        r.sourceClassName === "HealthSystem" &&
+        r.targetClassName === "PlayerController",
+    );
+    expect(fieldRefs.length).toBeGreaterThan(0);
+  });
+
+  it("extracts method parameter types as USES edges", () => {
+    const content = `
+public class MyClass {
+  public void Init(PlayerController ctrl) {}
+}`;
+    const refs = extractTypeReferences(content);
+    expect(
+      refs.some(
+        (r) =>
+          r.edgeType === "USES" &&
+          r.sourceClassName === "MyClass" &&
+          r.targetClassName === "PlayerController",
+      ),
+    ).toBe(true);
+  });
+
+  it("extracts local variable type declarations as USES edges", () => {
+    const content = `
+public class MyClass {
+  void Foo() {
+    PlayerController ctrl = null;
+  }
+}`;
+    const refs = extractTypeReferences(content);
+    expect(
+      refs.some(
+        (r) =>
+          r.edgeType === "USES" &&
+          r.sourceClassName === "MyClass" &&
+          r.targetClassName === "PlayerController",
+      ),
+    ).toBe(true);
+  });
+
+  it("ignores C# primitive types", () => {
+    const content = `
+public class MyClass {
+  private int count;
+  private string name;
+  private bool flag;
+  void Foo(float x) {}
+}`;
+    const refs = extractTypeReferences(content);
+    expect(refs).toHaveLength(0);
+  });
+
+  it("ignores Unity built-in types", () => {
+    const content = `
+public class MyClass {
+  private Rigidbody rb;
+  private Animator anim;
+  private Camera cam;
+}`;
+    const refs = extractTypeReferences(content);
+    expect(refs).toHaveLength(0);
+  });
+
+  it("strips generic wrapper and extracts inner type", () => {
+    const content = `
+public class MyClass {
+  private List<PlayerController> players;
+}`;
+    const refs = extractTypeReferences(content);
+    expect(
+      refs.some((r) => r.edgeType === "USES" && r.targetClassName === "PlayerController"),
+    ).toBe(true);
+  });
+
+  it("deduplicates identical source/target pairs", () => {
+    const content = `
+public class MyClass {
+  private PlayerController ctrl1;
+  private PlayerController ctrl2;
+}`;
+    const refs = extractTypeReferences(content);
+    const dupes = refs.filter(
+      (r) => r.sourceClassName === "MyClass" && r.targetClassName === "PlayerController",
+    );
+    expect(dupes).toHaveLength(1);
+  });
+
+  it("skips var (implicit type) declarations", () => {
+    const content = `
+public class MyClass {
+  void Foo() {
+    var x = new PlayerController();
+  }
+}`;
+    const refs = extractTypeReferences(content);
+    // var is unresolvable — should not emit USES for 'var'
+    expect(refs.every((r) => r.targetClassName !== "var")).toBe(true);
+  });
+
+  it("returns empty array for interface-only file", () => {
+    const content = readFileSync(join(FIXTURES, "Scripts/IDamageable.cs"), "utf-8");
+    const refs = extractTypeReferences(content);
+    expect(refs).toHaveLength(0);
   });
 });

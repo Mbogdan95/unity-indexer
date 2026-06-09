@@ -366,7 +366,8 @@ export type GraphEdgeType =
   | "BELONGS_TO"
   | "CALLS"
   | "SUBSCRIBES_TO"
-  | "ASSEMBLY_DEPENDS";
+  | "ASSEMBLY_DEPENDS"
+  | "USES";
 
 export interface GraphEdgeRow {
   id?: number;

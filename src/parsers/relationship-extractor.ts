@@ -136,6 +136,25 @@ const UNITY_BUILTIN_TYPES = new Set([
   "TextMeshProUGUI",
 ]);
 
+const CS_PRIMITIVE_KEYWORDS = new Set([
+  "int",
+  "float",
+  "bool",
+  "string",
+  "double",
+  "long",
+  "void",
+  "byte",
+  "char",
+  "object",
+  "var",
+  "uint",
+  "ushort",
+  "short",
+  "sbyte",
+  "decimal",
+]);
+
 function isUppercase(name: string): boolean {
   return name.length > 0 && name[0] === name[0].toUpperCase() && name[0] !== name[0].toLowerCase();
 }
@@ -219,6 +238,39 @@ function extractGenericTypeArg(genericNameNode: Node): string | null {
     }
   }
   return null;
+}
+
+function isFilteredType(name: string): boolean {
+  return UNITY_BUILTIN_TYPES.has(name) || CS_PRIMITIVE_KEYWORDS.has(name);
+}
+
+function typeNamesFromNode(typeNode: Node): string[] {
+  switch (typeNode.type) {
+    case "identifier":
+      return [typeNode.text];
+    case "generic_name": {
+      // List<T>, Dictionary<K,V> — skip outer name, recurse into type args
+      const typeArgList = typeNode.namedChildren.find((c) => c.type === "type_argument_list");
+      if (!typeArgList) return [];
+      const names: string[] = [];
+      for (const arg of typeArgList.namedChildren) {
+        if (arg.type === "identifier" || arg.type === "generic_name") {
+          names.push(...typeNamesFromNode(arg));
+        }
+      }
+      return names;
+    }
+    case "array_type": {
+      const inner = typeNode.childForFieldName("type");
+      return inner ? typeNamesFromNode(inner) : [];
+    }
+    case "nullable_type": {
+      if (typeNode.namedChildren.length === 0) return [];
+      return typeNamesFromNode(typeNode.namedChildren[0]);
+    }
+    default:
+      return [];
+  }
 }
 
 export function extractRelationships(content: string): ExtractedRelationship[] {
@@ -343,6 +395,76 @@ export function extractRelationships(content: string): ExtractedRelationship[] {
   });
 
   // Deduplicate relationships
+  const seen = new Set<string>();
+  const deduped: ExtractedRelationship[] = [];
+  for (const rel of results) {
+    const key = `${rel.sourceClassName}|${rel.edgeType}|${rel.targetClassName}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(rel);
+    }
+  }
+
+  tree.delete();
+  return deduped;
+}
+
+export function extractTypeReferences(content: string): ExtractedRelationship[] {
+  const parser = getParser();
+  if (!parser) {
+    throw new Error("Script parser not initialized. Call initScriptParser() first.");
+  }
+
+  const tree = parser.parse(content);
+  if (!tree) return [];
+
+  const results: ExtractedRelationship[] = [];
+  const classBodies = collectClassBodies(tree.rootNode);
+
+  walkAll(tree.rootNode, (node) => {
+    const sourceClassName = findSourceClass(node.startIndex, classBodies);
+    if (!sourceClassName) return;
+
+    const typeNodes: Node[] = [];
+
+    // Pattern 1: field declarations — private T _field;
+    if (node.type === "field_declaration") {
+      const varDecl = node.namedChildren.find((c) => c.type === "variable_declaration");
+      if (varDecl) {
+        const typeNode = varDecl.childForFieldName("type");
+        if (typeNode) typeNodes.push(typeNode);
+      }
+    }
+
+    // Pattern 2: method parameters — void Foo(T param) {}
+    if (node.type === "parameter") {
+      const typeNode = node.childForFieldName("type");
+      if (typeNode) typeNodes.push(typeNode);
+    }
+
+    // Pattern 3: local variable declarations — T x = ...;
+    if (node.type === "local_declaration_statement") {
+      const varDecl = node.namedChildren.find((c) => c.type === "variable_declaration");
+      if (varDecl) {
+        const typeNode = varDecl.childForFieldName("type");
+        if (typeNode) typeNodes.push(typeNode);
+      }
+    }
+
+    for (const typeNode of typeNodes) {
+      for (const name of typeNamesFromNode(typeNode)) {
+        if (isUppercase(name) && !isFilteredType(name)) {
+          results.push({
+            sourceClassName,
+            edgeType: "USES",
+            targetClassName: name,
+          });
+        }
+      }
+    }
+  });
+
+  // Deduplicate
   const seen = new Set<string>();
   const deduped: ExtractedRelationship[] = [];
   for (const rel of results) {
