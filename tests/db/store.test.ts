@@ -252,6 +252,8 @@ describe("Store - scripts", () => {
       signature: "void Start()",
       has_serialize_field: false,
       has_header_attr: false,
+      start_line: 0,
+      end_line: 0,
     };
     store.insertScriptMember(member);
 
@@ -433,6 +435,8 @@ describe("Store - deleteFileData", () => {
       signature: "void Awake()",
       has_serialize_field: false,
       has_header_attr: false,
+      start_line: 0,
+      end_line: 0,
     });
 
     // Guid + reference
