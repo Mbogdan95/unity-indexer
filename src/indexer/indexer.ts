@@ -490,6 +490,8 @@ export class Indexer {
           signature,
           has_serialize_field: member.attributes.includes("SerializeField"),
           has_header_attr: member.attributes.includes("Header"),
+          start_line: member.startLine,
+          end_line: member.endLine,
         });
       }
 
@@ -825,6 +827,7 @@ export class Indexer {
       hot_scripts: JSON.stringify(hotScripts),
       description,
       indexed_at: new Date().toISOString(),
+      root_path: this.projectRoot,
     });
   }
 

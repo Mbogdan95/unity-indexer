@@ -87,6 +87,23 @@ describe("Indexer", () => {
     expect(playerControllers.length).toBe(1);
   });
 
+  it("indexes script members with start_line and end_line", () => {
+    indexer.indexAll();
+    const pc = store.getScriptByClassName("PlayerController");
+    expect(pc).toBeDefined();
+    const members = store.getScriptMembers(pc!.id);
+    expect(members.length).toBeGreaterThan(0);
+    expect(members.every((m) => m.start_line > 0 && m.end_line > 0)).toBe(true);
+    expect(members.every((m) => m.start_line <= m.end_line)).toBe(true);
+  });
+
+  it("stores project root path in project_summary", () => {
+    indexer.indexAll();
+    const rootPath = store.getProjectRootPath();
+    expect(rootPath.length).toBeGreaterThan(0);
+    expect(rootPath).toContain("TestProject");
+  });
+
   it("indexes USES edges from field type declarations", () => {
     indexer.indexAll();
 

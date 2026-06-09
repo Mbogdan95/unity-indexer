@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS project_summary (
   hot_scripts     TEXT NOT NULL DEFAULT '[]',
   recent_changes  TEXT NOT NULL DEFAULT '[]',
   description     TEXT NOT NULL DEFAULT '',
-  indexed_at      TEXT NOT NULL DEFAULT ''
+  indexed_at      TEXT NOT NULL DEFAULT '',
+  root_path       TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS files (
@@ -115,7 +116,9 @@ CREATE TABLE IF NOT EXISTS script_members (
   attributes          TEXT NOT NULL DEFAULT '[]',
   signature           TEXT NOT NULL DEFAULT '',
   has_serialize_field INTEGER NOT NULL DEFAULT 0,
-  has_header_attr     INTEGER NOT NULL DEFAULT 0
+  has_header_attr     INTEGER NOT NULL DEFAULT 0,
+  start_line          INTEGER NOT NULL DEFAULT 0,
+  end_line            INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_script_members_script_id

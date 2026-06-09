@@ -73,6 +73,8 @@ export interface ParsedScriptMember {
   parameters: Array<{ name: string; type: string }>;
   attributes: string[];
   isStatic: boolean;
+  startLine: number;
+  endLine: number;
 }
 
 export interface ParsedMeta {
@@ -298,6 +300,8 @@ export interface ScriptMemberRow {
   signature: string;
   has_serialize_field: boolean;
   has_header_attr: boolean;
+  start_line: number;
+  end_line: number;
 }
 
 export interface GuidRow {
@@ -350,6 +354,7 @@ export interface ProjectSummaryRow {
   recent_changes: string; // JSON
   description: string;
   indexed_at: string;
+  root_path: string;
 }
 
 export type GraphNodeType = "file" | "script" | "game_object" | "component" | "assembly";

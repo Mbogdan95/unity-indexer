@@ -88,6 +88,8 @@ function memberRowOut(row: Record<string, unknown>): ScriptMemberRow & { id: num
     signature: row.signature as string,
     has_serialize_field: boolOut(row.has_serialize_field),
     has_header_attr: boolOut(row.has_header_attr),
+    start_line: row.start_line as number,
+    end_line: row.end_line as number,
   };
 }
 
@@ -462,10 +464,10 @@ export class Store {
     const stmt = this.prepare(`
       INSERT INTO script_members
         (script_id, name, kind, access, return_type, parameters, attributes, signature,
-         has_serialize_field, has_header_attr)
+         has_serialize_field, has_header_attr, start_line, end_line)
       VALUES
         (@script_id, @name, @kind, @access, @return_type, @parameters, @attributes, @signature,
-         @has_serialize_field, @has_header_attr)
+         @has_serialize_field, @has_header_attr, @start_line, @end_line)
     `);
     const result = stmt.run({
       script_id: member.script_id,
@@ -478,6 +480,8 @@ export class Store {
       signature: member.signature,
       has_serialize_field: member.has_serialize_field ? 1 : 0,
       has_header_attr: member.has_header_attr ? 1 : 0,
+      start_line: member.start_line,
+      end_line: member.end_line,
     });
     return result.lastInsertRowid as number;
   }
@@ -699,7 +703,15 @@ export class Store {
       recent_changes: row.recent_changes as string,
       description: row.description as string,
       indexed_at: row.indexed_at as string,
+      root_path: row.root_path as string,
     };
+  }
+
+  getProjectRootPath(): string {
+    const row = this.prepare("SELECT root_path FROM project_summary WHERE id = 1").get() as
+      | { root_path: string }
+      | undefined;
+    return row?.root_path ?? "";
   }
 
   updateProjectSummary(partial: Partial<Omit<ProjectSummaryRow, "id">>): void {

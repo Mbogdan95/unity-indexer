@@ -271,6 +271,8 @@ function parseMethod(node: Node, typeKind: TypeKind): ParsedScriptMember {
     parameters: parseParameters(paramsNode),
     attributes,
     isStatic,
+    startLine: node.startPosition.row + 1,
+    endLine: node.endPosition.row + 1,
   };
 }
 
@@ -298,6 +300,8 @@ function parseField(node: Node): ParsedScriptMember[] {
       parameters: [],
       attributes,
       isStatic,
+      startLine: node.startPosition.row + 1,
+      endLine: node.endPosition.row + 1,
     };
   });
 }
@@ -320,6 +324,8 @@ function parseProperty(node: Node, typeKind: TypeKind): ParsedScriptMember {
     parameters: [],
     attributes,
     isStatic,
+    startLine: node.startPosition.row + 1,
+    endLine: node.endPosition.row + 1,
   };
 }
 
@@ -340,6 +346,8 @@ function parseConstructor(node: Node): ParsedScriptMember {
     parameters: parseParameters(paramsNode),
     attributes,
     isStatic,
+    startLine: node.startPosition.row + 1,
+    endLine: node.endPosition.row + 1,
   };
 }
 
@@ -366,6 +374,8 @@ function parseEventField(node: Node): ParsedScriptMember[] {
       parameters: [],
       attributes,
       isStatic,
+      startLine: node.startPosition.row + 1,
+      endLine: node.endPosition.row + 1,
     };
   });
 }
