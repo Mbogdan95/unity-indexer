@@ -447,6 +447,13 @@ export class Store {
     return row ? scriptRowOut(row) : undefined;
   }
 
+  getScriptById(id: number): (ScriptRow & { id: number }) | undefined {
+    const row = this.prepare("SELECT * FROM scripts WHERE id = ? LIMIT 1").get(id) as
+      | Record<string, unknown>
+      | undefined;
+    return row ? scriptRowOut(row) : undefined;
+  }
+
   // ---------------------------------------------------------------------------
   // Script Members
   // ---------------------------------------------------------------------------

@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, beforeAll } from "vitest";
 import { Store } from "../../src/db/store.js";
+import { join } from "path";
+import { initScriptParser } from "../../src/parsers/script-parser.js";
 import type {
   FileRow,
   GameObjectRow,
@@ -71,7 +73,13 @@ function makeScript(fileId: number, overrides: Partial<ScriptRow> = {}): ScriptR
 // Tests
 // ---------------------------------------------------------------------------
 
+const FIXTURES = join(import.meta.dirname, "../fixtures/TestProject");
+
 let store: Store;
+
+beforeAll(async () => {
+  await initScriptParser();
+});
 
 beforeEach(() => {
   store = new Store(":memory:");
@@ -216,6 +224,17 @@ describe("Store - scripts", () => {
   it("returns undefined when no script for file_id", () => {
     const fileId = store.upsertFile(makeFile({ path: "Assets/Scenes/X.unity", type: "scene" }));
     expect(store.getScriptByFileId(fileId)).toBeUndefined();
+  });
+
+  it("getScriptById returns script row", async () => {
+    const { Indexer } = await import("../../src/indexer/indexer.js");
+    const indexer = new Indexer(store, FIXTURES);
+    indexer.indexAll();
+    const pc = store.getScriptByClassName("PlayerController");
+    expect(pc).toBeDefined();
+    const byId = store.getScriptById(pc!.id);
+    expect(byId).toBeDefined();
+    expect(byId!.class_name).toBe("PlayerController");
   });
 
   it("inserts and retrieves script members", () => {

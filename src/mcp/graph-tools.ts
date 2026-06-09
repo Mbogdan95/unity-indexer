@@ -9,6 +9,31 @@ function estimateTokens(obj: unknown): number {
   return Math.ceil(JSON.stringify(obj).length / 4);
 }
 
+function resolveNodeLabel(store: Store, nodeId: string): string {
+  const { type, id } = decodeNodeId(nodeId);
+  switch (type) {
+    case "script": {
+      const script = store.getScriptById(id);
+      return script?.class_name ?? nodeId;
+    }
+    case "file": {
+      const file = store.getFileById(id);
+      return file?.path ?? nodeId;
+    }
+    case "game_object": {
+      const go = store.getGameObjectById(id);
+      return go?.name ?? nodeId;
+    }
+    case "assembly": {
+      const asms = store.listAssemblies();
+      const asm = asms.find((a) => a.id === id);
+      return asm?.name ?? nodeId;
+    }
+    default:
+      return nodeId;
+  }
+}
+
 function resolveIdentifier(store: Store, identifier: string): string | null {
   // 1. Try as script class_name
   const script = store.getScriptByClassName(identifier);
@@ -43,6 +68,7 @@ export function handleTraceDependencies(
       id: n.id,
       type: decodeNodeId(n.id).type,
       depth: n.depth,
+      label: resolveNodeLabel(store, n.id),
     })),
     edges: result.edges,
     summary: `${params.identifier} has ${String(result.nodes.length - 1)} transitive dependencies across ${String(depth)} levels`,
@@ -66,6 +92,7 @@ export function handleTraceDependents(
       id: n.id,
       type: decodeNodeId(n.id).type,
       depth: n.depth,
+      label: resolveNodeLabel(store, n.id),
     })),
     edges: result.edges,
     summary: `${String(result.nodes.length - 1)} things depend on ${params.identifier} within ${String(depth)} levels`,
@@ -93,7 +120,11 @@ export function handleFindPath(
   }
 
   const response = {
-    path: result.nodes,
+    path: result.nodes.map((nodeId) => ({
+      id: nodeId,
+      type: decodeNodeId(nodeId).type,
+      label: resolveNodeLabel(store, nodeId),
+    })),
     edges: result.edges,
     summary: `Path of length ${String(result.nodes.length - 1)} from ${params.from} to ${params.to}`,
   };
@@ -116,6 +147,7 @@ export function handleGetSubgraph(
       id: n.id,
       type: decodeNodeId(n.id).type,
       depth: n.depth,
+      label: resolveNodeLabel(store, n.id),
     })),
     edges: result.edges,
     summary: `${String(result.nodes.length)} nodes within radius ${String(radius)} of ${params.identifier}`,

@@ -39,8 +39,10 @@ describe("handleTraceDependencies", () => {
     expect(result.nodes).toBeDefined();
     expect(result.edges).toBeDefined();
     expect(result.summary).toBeDefined();
-    const nodes = result.nodes as unknown[];
+    const nodes = result.nodes as Array<Record<string, unknown>>;
     expect(nodes.length).toBeGreaterThan(0);
+    // NEW: every node must have a label field
+    expect(nodes.every((n) => typeof n.label === "string")).toBe(true);
   });
 
   it("returns error for unknown identifier", () => {
@@ -54,15 +56,16 @@ describe("handleTraceDependencies", () => {
 });
 
 describe("handleTraceDependents", () => {
-  it("returns dependents for a script", () => {
+  it("returns dependents for a script with label fields", () => {
     const result = handleTraceDependents(store, {
       identifier: "PlayerController",
       depth: 2,
     }) as Record<string, unknown>;
 
     expect(result.nodes).toBeDefined();
-    const nodes = result.nodes as unknown[];
+    const nodes = result.nodes as Array<Record<string, unknown>>;
     expect(nodes.length).toBeGreaterThan(0);
+    expect(nodes.every((n) => typeof n.label === "string")).toBe(true);
   });
 });
 
@@ -79,15 +82,16 @@ describe("handleFindPath", () => {
 });
 
 describe("handleGetSubgraph", () => {
-  it("returns neighborhood for a script", () => {
+  it("returns neighborhood with label fields", () => {
     const result = handleGetSubgraph(store, {
       identifier: "PlayerController",
       radius: 1,
     }) as Record<string, unknown>;
 
     expect(result.nodes).toBeDefined();
-    const nodes = result.nodes as unknown[];
+    const nodes = result.nodes as Array<Record<string, unknown>>;
     expect(nodes.length).toBeGreaterThan(0);
+    expect(nodes.every((n) => typeof n.label === "string")).toBe(true);
   });
 });
 
