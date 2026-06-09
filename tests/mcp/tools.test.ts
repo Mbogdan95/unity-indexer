@@ -6,6 +6,7 @@ import {
   handleGetSceneHierarchy,
   handleListScripts,
   handleGetScriptDetail,
+  handleBatchGetScriptDetail,
   handleFindReferences,
   handleFindDependencies,
   handleSearch,
@@ -433,5 +434,48 @@ describe("StoreResolver", () => {
       throw new Error(`Unknown project "${String(name)}"`);
     };
     expect(() => resolver("Nonexistent")).toThrow('Unknown project "Nonexistent"');
+  });
+});
+
+describe("handleBatchGetScriptDetail", () => {
+  it("returns details for multiple class names", () => {
+    const result = handleBatchGetScriptDetail(store, {
+      class_names: ["PlayerController", "HealthSystem"],
+    }) as Record<string, unknown>;
+
+    expect(result.results).toBeDefined();
+    const results = result.results as Array<Record<string, unknown>>;
+    expect(results).toHaveLength(2);
+
+    const pc = results.find((r) => r.class_name === "PlayerController");
+    expect(pc).toBeDefined();
+    expect((pc!.detail as Record<string, unknown>).error).toBeUndefined();
+    expect((pc!.detail as Record<string, unknown>).members).toBeDefined();
+  });
+
+  it("accepts script:N node IDs in batch", () => {
+    const pc = store.getScriptByClassName("PlayerController");
+    expect(pc).toBeDefined();
+    const nodeId = `script:${String(pc!.id)}`;
+
+    const result = handleBatchGetScriptDetail(store, {
+      class_names: [nodeId],
+    }) as Record<string, unknown>;
+
+    const results = result.results as Array<Record<string, unknown>>;
+    expect(results).toHaveLength(1);
+    expect((results[0].detail as Record<string, unknown>).class_name).toBe("PlayerController");
+  });
+
+  it("returns error entry for unknown class in batch", () => {
+    const result = handleBatchGetScriptDetail(store, {
+      class_names: ["PlayerController", "INonExistent"],
+    }) as Record<string, unknown>;
+
+    const results = result.results as Array<Record<string, unknown>>;
+    expect(results).toHaveLength(2);
+    const unknown = results.find((r) => r.class_name === "INonExistent");
+    expect(unknown).toBeDefined();
+    expect((unknown!.detail as Record<string, unknown>).error).toBeDefined();
   });
 });

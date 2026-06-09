@@ -594,6 +594,20 @@ export function handleRecentChanges(
   return { token_hint: estimateTokens(response), ...response };
 }
 
+export function handleBatchGetScriptDetail(
+  store: Store,
+  params: { class_names: string[]; include_bodies?: boolean },
+): object {
+  const results = params.class_names.map((name) => ({
+    class_name: name,
+    detail: handleGetScriptDetail(store, {
+      class_name: name,
+      include_bodies: params.include_bodies,
+    }),
+  }));
+  return { token_hint: estimateTokens(results), results };
+}
+
 // ---------------------------------------------------------------------------
 // MCP Tool Registration
 // ---------------------------------------------------------------------------
@@ -725,6 +739,31 @@ export function registerTools(server: McpServer, resolveStore: StoreResolver): v
       },
     },
     (params) => toContent(handleGetScriptDetail(resolveStore(params.project), params)),
+  );
+
+  server.registerTool(
+    "batch_get_script_detail",
+    {
+      description:
+        "Get full details for multiple scripts in one call. Accepts class names or script:N node IDs. " +
+        "Reduces tool-call overhead when analysing related classes.",
+      inputSchema: {
+        class_names: z
+          .array(z.string())
+          .describe(
+            "Array of class names or script:N node IDs (e.g. ['PlayerController', 'HealthSystem'])",
+          ),
+        include_bodies: z
+          .boolean()
+          .optional()
+          .describe("If true, include full source body for each member"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
+      },
+    },
+    (params) => toContent(handleBatchGetScriptDetail(resolveStore(params.project), params)),
   );
 
   server.registerTool(
