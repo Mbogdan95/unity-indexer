@@ -199,6 +199,38 @@ export function handleGetGraphStats(
   return { token_hint: estimateTokens(response), ...response };
 }
 
+export function handleFindImplementors(store: Store, params: { interface_name: string }): object {
+  const script = store.getScriptByClassName(params.interface_name);
+  if (!script) {
+    return { token_hint: 10, error: `Script not found: ${params.interface_name}` };
+  }
+
+  const nodeId = encodeNodeId("script", script.id);
+  const incoming = store.graph.getIncoming(nodeId, ["IMPLEMENTS"]);
+
+  const implementors = incoming
+    .map((n) => {
+      const { type, id } = decodeNodeId(n.nodeId);
+      if (type !== "script") return null;
+      const implScript = store.getScriptById(id);
+      if (!implScript) return null;
+      const file = store.getFileById(implScript.file_id);
+      return {
+        class_name: implScript.class_name,
+        file_path: file?.path ?? "",
+        ...(implScript.namespace ? { namespace: implScript.namespace } : {}),
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
+  const response = {
+    interface_name: params.interface_name,
+    implementors,
+    total: implementors.length,
+  };
+  return { token_hint: estimateTokens(response), ...response };
+}
+
 export function registerGraphTools(server: McpServer, resolveStore: StoreResolver): void {
   const toContent = (obj: object) => ({
     content: [{ type: "text" as const, text: JSON.stringify(obj) }],
@@ -327,5 +359,21 @@ export function registerGraphTools(server: McpServer, resolveStore: StoreResolve
       },
     },
     (params) => toContent(handleGetGraphStats(resolveStore(params.project), params)),
+  );
+
+  server.registerTool(
+    "find_implementors",
+    {
+      description:
+        "Find all classes that implement a given interface. Answers: 'who implements IMyInterface?'",
+      inputSchema: {
+        interface_name: z.string().describe("Interface class name (e.g. 'ISceneLoader')"),
+        project: z
+          .string()
+          .optional()
+          .describe("Project name (required if multiple projects indexed)"),
+      },
+    },
+    (params) => toContent(handleFindImplementors(resolveStore(params.project), params)),
   );
 }

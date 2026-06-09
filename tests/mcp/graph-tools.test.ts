@@ -9,6 +9,7 @@ import {
   handleGetSubgraph,
   handleDetectCycles,
   handleGetGraphStats,
+  handleFindImplementors,
 } from "../../src/mcp/graph-tools.js";
 import { join } from "path";
 
@@ -130,5 +131,43 @@ describe("handleGetGraphStats", () => {
     expect(result.rankings).toBeDefined();
     const rankings = result.rankings as unknown[];
     expect(rankings.length).toBeGreaterThan(0);
+  });
+});
+
+describe("handleFindImplementors", () => {
+  it("returns implementors for IDamageable", () => {
+    // PlayerController.cs declares: public class PlayerController : MonoBehaviour, IDamageable
+    const result = handleFindImplementors(store, {
+      interface_name: "IDamageable",
+    }) as Record<string, unknown>;
+
+    expect(result.interface_name).toBe("IDamageable");
+    expect(result.implementors).toBeDefined();
+    const implementors = result.implementors as Array<Record<string, unknown>>;
+    expect(implementors.length).toBeGreaterThan(0);
+    const pc = implementors.find((i) => i.class_name === "PlayerController");
+    expect(pc).toBeDefined();
+    expect(typeof pc!.file_path).toBe("string");
+    expect((pc!.file_path as string).endsWith(".cs")).toBe(true);
+  });
+
+  it("returns error for unknown interface", () => {
+    const result = handleFindImplementors(store, {
+      interface_name: "INonExistent",
+    }) as Record<string, unknown>;
+
+    expect(result.error).toBeDefined();
+  });
+
+  it("returns empty implementors for class with no implementors", () => {
+    // HealthSystem is a class, not an interface — no one IMPLEMENTs it
+    const result = handleFindImplementors(store, {
+      interface_name: "HealthSystem",
+    }) as Record<string, unknown>;
+
+    // Not an error (HealthSystem is a valid script) — just 0 implementors
+    expect(result.error).toBeUndefined();
+    const implementors = result.implementors as Array<Record<string, unknown>>;
+    expect(implementors).toHaveLength(0);
   });
 });
