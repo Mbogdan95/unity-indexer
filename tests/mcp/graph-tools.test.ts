@@ -149,6 +149,7 @@ describe("handleFindImplementors", () => {
     expect(pc).toBeDefined();
     expect(typeof pc!.file_path).toBe("string");
     expect((pc!.file_path as string).endsWith(".cs")).toBe(true);
+    expect(typeof result.total).toBe("number");
   });
 
   it("returns error for unknown interface", () => {

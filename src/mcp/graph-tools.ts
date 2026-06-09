@@ -227,6 +227,7 @@ export function handleFindImplementors(store: Store, params: { interface_name: s
     interface_name: params.interface_name,
     implementors,
     total: implementors.length,
+    summary: `Found ${String(implementors.length)} implementor(s) of ${params.interface_name}`,
   };
   return { token_hint: estimateTokens(response), ...response };
 }
