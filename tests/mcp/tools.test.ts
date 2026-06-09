@@ -189,6 +189,20 @@ describe("handleGetScriptDetail", () => {
     expect(result.error).toBeUndefined();
     expect(result.class_name).toBe("PlayerController");
   });
+
+  it("returns method body when include_bodies is true", () => {
+    const result = handleGetScriptDetail(store, {
+      class_name: "PlayerController",
+      include_bodies: true,
+    }) as Record<string, unknown>;
+
+    expect(result.error).toBeUndefined();
+    const members = result.members as Array<Record<string, unknown>>;
+    expect(members.length).toBeGreaterThan(0);
+    // At least some members should have a non-empty body string
+    const membersWithBody = members.filter((m) => typeof m.body === "string" && m.body.length > 0);
+    expect(membersWithBody.length).toBeGreaterThan(0);
+  });
 });
 
 describe("handleFindReferences", () => {
