@@ -59,8 +59,10 @@ export async function startServer(rootDir: string): Promise<void> {
   log("initializing C# parser...");
   await initScriptParser();
 
+  // Phase 1: open stores and create indexers (fast — no file I/O yet)
   const projects = new Map<string, ProjectInstance>();
   const usedNames = new Set<string>();
+  const toIndex: Array<{ name: string; indexer: Indexer; store: Store }> = [];
 
   for (const projectRoot of projectPaths) {
     const name = uniqueName(basename(projectRoot), usedNames);
@@ -71,32 +73,15 @@ export async function startServer(rootDir: string): Promise<void> {
     log(`[${name}] project: ${projectRoot}`);
     log(`[${name}] database: ${dbPath}`);
 
-    let store: Store;
-    let indexer: Indexer;
-    let watcher: FileWatcher;
-
     try {
-      store = new Store(dbPath);
-      indexer = new Indexer(store, projectRoot);
-
-      log(`[${name}] indexing...`);
-      const start = Date.now();
-      indexer.indexAll();
-      const summary = store.getProjectSummary();
-      const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-      log(
-        `[${name}] indexed in ${elapsed}s — ${String(summary.scene_count)} scenes, ${String(summary.prefab_count)} prefabs, ${String(summary.script_count)} scripts`,
-      );
-
-      watcher = new FileWatcher(indexer, projectRoot);
-      watcher.start();
-      log(`[${name}] file watcher started`);
+      const store = new Store(dbPath);
+      const indexer = new Indexer(store, projectRoot);
+      const watcher = new FileWatcher(indexer, projectRoot);
+      projects.set(name, { name, projectRoot, store, indexer, watcher });
+      toIndex.push({ name, indexer, store });
     } catch (err) {
       log(`[${name}] failed to initialize: ${String(err)}`);
-      continue;
     }
-
-    projects.set(name, { name, projectRoot, store, indexer, watcher });
   }
 
   if (projects.size === 0) {
@@ -191,8 +176,30 @@ export async function startServer(rootDir: string): Promise<void> {
   registerTools(server, resolveStore);
   registerGraphTools(server, resolveStore);
 
+  // Connect transport before indexing so the MCP handshake completes immediately.
+  // Tool calls arriving during indexing will block until indexAll() returns.
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  log("MCP server connected — indexing projects...");
+
+  // Phase 2: index and start watchers (may take a while on large projects)
+  for (const { name, indexer, store } of toIndex) {
+    try {
+      log(`[${name}] indexing...`);
+      const start = Date.now();
+      indexer.indexAll();
+      const summary = store.getProjectSummary();
+      const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+      log(
+        `[${name}] indexed in ${elapsed}s — ${String(summary.scene_count)} scenes, ${String(summary.prefab_count)} prefabs, ${String(summary.script_count)} scripts`,
+      );
+      projects.get(name)?.watcher.start();
+      log(`[${name}] file watcher started`);
+    } catch (err) {
+      log(`[${name}] indexing failed: ${String(err)}`);
+    }
+  }
+
   log("MCP server ready");
 
   const cleanup = () => {
