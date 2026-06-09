@@ -824,45 +824,59 @@ export class Store {
     query: string,
     scope?: "files" | "game_objects" | "scripts",
   ): { type: string; id: number; label: string; importance_score: number }[] {
-    const like = `%${query}%`;
+    const terms = query
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((t) => `%${t}%`);
+    if (terms.length === 0) return [];
+
     const results: { type: string; id: number; label: string; importance_score: number }[] = [];
 
     if (!scope || scope === "files") {
+      // Each term must match path OR summary_line
+      const termClauses = terms.map(() => "(path LIKE ? OR summary_line LIKE ?)").join(" AND ");
+      const params = terms.flatMap((t) => [t, t]);
       const rows = this.db
         .prepare(
           `SELECT id, path AS label, importance_score
            FROM files
-           WHERE path LIKE ? OR summary_line LIKE ?
+           WHERE ${termClauses}
            ORDER BY importance_score DESC
            LIMIT 50`,
         )
-        .all(like, like) as { id: number; label: string; importance_score: number }[];
+        .all(...params) as { id: number; label: string; importance_score: number }[];
       rows.forEach((r) => results.push({ type: "file", ...r }));
     }
 
     if (!scope || scope === "game_objects") {
+      const termClauses = terms.map(() => "name LIKE ?").join(" AND ");
       const rows = this.db
         .prepare(
           `SELECT id, name AS label, importance_score
            FROM game_objects
-           WHERE name LIKE ?
+           WHERE ${termClauses}
            ORDER BY importance_score DESC
            LIMIT 50`,
         )
-        .all(like) as { id: number; label: string; importance_score: number }[];
+        .all(...terms) as { id: number; label: string; importance_score: number }[];
       rows.forEach((r) => results.push({ type: "game_object", ...r }));
     }
 
     if (!scope || scope === "scripts") {
+      const termClauses = terms
+        .map(() => "(class_name LIKE ? OR api_summary LIKE ?)")
+        .join(" AND ");
+      const params = terms.flatMap((t) => [t, t]);
       const rows = this.db
         .prepare(
           `SELECT id, class_name AS label, complexity_score AS importance_score
            FROM scripts
-           WHERE class_name LIKE ?
+           WHERE ${termClauses}
            ORDER BY complexity_score DESC
            LIMIT 50`,
         )
-        .all(like) as { id: number; label: string; importance_score: number }[];
+        .all(...params) as { id: number; label: string; importance_score: number }[];
       rows.forEach((r) => results.push({ type: "script", ...r }));
     }
 

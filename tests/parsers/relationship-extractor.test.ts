@@ -76,6 +76,34 @@ describe("extractRelationships", () => {
     const healthRels = rels.filter((r) => r.sourceClassName === "HealthSystem");
     expect(healthRels.length).toBeGreaterThan(0);
   });
+
+  it("extracts CALLS from chained singleton pattern (Foo.Instance.Method())", () => {
+    const content = `public class GameManager : MonoBehaviour {
+      void Update() {
+          DailyBlitzManager.Instance.Initialize();
+      }
+    }`;
+    const rels = extractRelationships(content);
+    const calls = rels.filter(
+      (r) => r.edgeType === "CALLS" && r.targetClassName === "DailyBlitzManager",
+    );
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[0].sourceClassName).toBe("GameManager");
+  });
+
+  it("extracts SUBSCRIBES_TO from chained singleton event (Foo.Instance.OnEvent +=)", () => {
+    const content = `public class GameManager : MonoBehaviour {
+      void Start() {
+          EventBus.Instance.OnMatchEnd += HandleMatchEnd;
+      }
+      void HandleMatchEnd() {}
+    }`;
+    const rels = extractRelationships(content);
+    const subs = rels.filter((r) => r.edgeType === "SUBSCRIBES_TO");
+    expect(subs.length).toBeGreaterThan(0);
+    expect(subs[0].targetClassName).toBe("EventBus");
+    expect(subs[0].sourceClassName).toBe("GameManager");
+  });
 });
 
 describe("extractTypeReferences", () => {

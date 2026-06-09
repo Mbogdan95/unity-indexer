@@ -627,3 +627,49 @@ describe("Store - graph edges", () => {
     expect(edges).toHaveLength(1);
   });
 });
+
+describe("Store - search", () => {
+  let store: Store;
+
+  beforeEach(() => {
+    store = new Store(":memory:");
+  });
+
+  afterEach(() => {
+    store.close();
+  });
+
+  it("single-term search matches scripts by class_name", () => {
+    const fileId = store.upsertFile(makeFile({ path: "GameManager.cs", type: "script" }));
+    store.insertScript(makeScript(fileId, { class_name: "GameManager" }));
+    const results = store.search("GameManager", "scripts");
+    expect(results.some((r) => r.label === "GameManager")).toBe(true);
+  });
+
+  it("multi-term search ANDs terms for scripts", () => {
+    const fileId = store.upsertFile(makeFile({ path: "GameManager.cs", type: "script" }));
+    store.insertScript(makeScript(fileId, { class_name: "GameManager" }));
+    store.insertScript(makeScript(fileId, { class_name: "GameController" }));
+
+    // "game manager" should match GameManager but not GameController
+    const results = store.search("game manager", "scripts");
+    expect(results.some((r) => r.label === "GameManager")).toBe(true);
+    expect(results.some((r) => r.label === "GameController")).toBe(false);
+  });
+
+  it("multi-term search ANDs terms for files", () => {
+    store.upsertFile(makeFile({ path: "UI/GameManager.cs", type: "script" }));
+    store.upsertFile(makeFile({ path: "UI/GameController.cs", type: "script" }));
+
+    const results = store.search("UI Manager", "files");
+    expect(results.some((r) => r.label.includes("GameManager"))).toBe(true);
+    expect(results.some((r) => r.label.includes("GameController"))).toBe(false);
+  });
+
+  it("returns empty for empty query", () => {
+    const fileId = store.upsertFile(makeFile({ path: "GameManager.cs", type: "script" }));
+    store.insertScript(makeScript(fileId, { class_name: "GameManager" }));
+    const results = store.search("", "scripts");
+    expect(results).toHaveLength(0);
+  });
+});

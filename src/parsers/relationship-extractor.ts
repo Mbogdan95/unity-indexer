@@ -161,6 +161,20 @@ function isUppercase(name: string): boolean {
 }
 
 /**
+ * Walk left along a member-access chain and return the leftmost identifier text.
+ * Handles singleton patterns like DailyBlitzManager.Instance.Initialize():
+ * the expression chain is (DailyBlitzManager).Instance and root is "DailyBlitzManager".
+ */
+function extractRootIdentifier(node: Node): string | null {
+  if (node.type === "identifier") return node.text;
+  if (node.type === "member_access_expression") {
+    const expr = node.childForFieldName("expression");
+    if (expr) return extractRootIdentifier(expr);
+  }
+  return null;
+}
+
+/**
  * Walk all descendants of a node, calling visitor for each.
  */
 function walkAll(node: Node, visitor: (n: Node) => void): void {
@@ -330,23 +344,21 @@ export function extractRelationships(content: string): ExtractedRelationship[] {
         }
 
         // Pattern 2: Static method calls — Receiver.Method() where receiver is uppercase
-        // invocation_expression -> member_access_expression -> (expression, name)
+        // Handles direct (Foo.Bar()) and chained (Foo.Instance.Bar()) patterns.
         if (fnNode.type === "member_access_expression") {
           const exprNode = fnNode.childForFieldName("expression");
-          const nameNode = fnNode.childForFieldName("name");
-
-          if (exprNode && nameNode) {
-            // The receiver should be an identifier (not a local variable) that starts with uppercase
+          if (exprNode) {
+            const rootId = extractRootIdentifier(exprNode);
             if (
-              exprNode.type === "identifier" &&
-              isUppercase(exprNode.text) &&
-              !UNITY_BUILTIN_TYPES.has(exprNode.text) &&
-              exprNode.text !== sourceClassName // skip self-calls
+              rootId !== null &&
+              isUppercase(rootId) &&
+              !UNITY_BUILTIN_TYPES.has(rootId) &&
+              rootId !== sourceClassName
             ) {
               results.push({
                 sourceClassName,
                 edgeType: "CALLS",
-                targetClassName: exprNode.text,
+                targetClassName: rootId,
               });
             }
           }
@@ -370,25 +382,27 @@ export function extractRelationships(content: string): ExtractedRelationship[] {
     }
 
     // Pattern 4: Event subscriptions — SomeManager.OnEvent += Handler
+    // Handles both direct (Foo.OnEvent +=) and chained (Foo.Instance.OnEvent +=) patterns.
     if (node.type === "assignment_expression") {
-      // Check if operator is +=
       const operatorNode = node.children.find((c) => c.type === "+=" || c.text === "+=");
       if (operatorNode) {
         const leftNode = node.childForFieldName("left");
         if (leftNode && leftNode.type === "member_access_expression") {
           const exprNode = leftNode.childForFieldName("expression");
-          if (
-            exprNode &&
-            exprNode.type === "identifier" &&
-            isUppercase(exprNode.text) &&
-            !UNITY_BUILTIN_TYPES.has(exprNode.text) &&
-            exprNode.text !== sourceClassName
-          ) {
-            results.push({
-              sourceClassName,
-              edgeType: "SUBSCRIBES_TO",
-              targetClassName: exprNode.text,
-            });
+          if (exprNode) {
+            const rootId = extractRootIdentifier(exprNode);
+            if (
+              rootId !== null &&
+              isUppercase(rootId) &&
+              !UNITY_BUILTIN_TYPES.has(rootId) &&
+              rootId !== sourceClassName
+            ) {
+              results.push({
+                sourceClassName,
+                edgeType: "SUBSCRIBES_TO",
+                targetClassName: rootId,
+              });
+            }
           }
         }
       }
