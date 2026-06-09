@@ -132,9 +132,15 @@ export class Indexer {
    * Index everything except scenes/prefabs, then return.
    * Call indexScenesAndPrefabsBackground() to finish in the background.
    * Useful for server startup: scripts are available to MCP tools immediately.
+   * Async so the event loop stays responsive (MCP handshake can complete between batches).
    */
-  indexEssential(): void {
+  async indexEssential(): Promise<void> {
+    // Yield before any blocking work so the MCP initialize handshake can complete
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
     const files = this.collectFiles();
+    // collectFiles blocks on large filesystems — yield again after
+    await new Promise<void>((resolve) => setImmediate(resolve));
     log(`found ${String(files.length)} files to index`);
 
     const metaFiles = files.filter((f) => f.endsWith(".meta"));
@@ -147,46 +153,40 @@ export class Indexer {
       (f) => f.endsWith(".unity") || f.endsWith(".prefab"),
     );
 
-    let endPhase: (() => void) | undefined;
-
     if (metaFiles.length > 0) {
       log(`indexing ${String(metaFiles.length)} meta files...`);
-      endPhase = this.benchmark?.startPhase("meta");
-      this.indexBatch(metaFiles);
-      endPhase?.();
+      await this.indexBatchAsync(metaFiles);
     }
 
     if (scripts.length > 0) {
       log(`indexing ${String(scripts.length)} script files...`);
-      endPhase = this.benchmark?.startPhase("scripts");
-      this.indexBatch(scripts);
-      endPhase?.();
+      await this.indexBatchAsync(scripts);
 
       log("building cross-script edges...");
-      endPhase = this.benchmark?.startPhase("script_edges");
-      this.store.transaction(() => {
-        for (const relPath of scripts) {
-          this.indexScriptCrossEdges(relPath);
-        }
-      });
-      endPhase?.();
+      const crossEdgeBatchSize = 500;
+      for (let i = 0; i < scripts.length; i += crossEdgeBatchSize) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        const batch = scripts.slice(i, i + crossEdgeBatchSize);
+        this.store.transaction(() => {
+          for (const relPath of batch) {
+            this.indexScriptCrossEdges(relPath);
+          }
+        });
+      }
     }
 
     if (asmdefs.length > 0) {
       log(`indexing ${String(asmdefs.length)} asmdef files...`);
-      endPhase = this.benchmark?.startPhase("asmdefs");
-      this.indexBatch(asmdefs);
-      endPhase?.();
+      await this.indexBatchAsync(asmdefs);
     }
 
     if (assets.length > 0) {
       log(`indexing ${String(assets.length)} asset files...`);
-      endPhase = this.benchmark?.startPhase("assets");
-      this.indexBatch(assets);
-      endPhase?.();
+      await this.indexBatchAsync(assets);
     }
 
     log("building GUID → class map...");
+    await new Promise<void>((resolve) => setImmediate(resolve));
     this.guidToClassCache = this.buildGuidToClassMap();
     // Keep guidToClassCache alive for the background scenes/prefabs pass
 
@@ -194,6 +194,7 @@ export class Indexer {
     this.store.recomputeReferenceCounts();
 
     log("hydrating graph...");
+    await new Promise<void>((resolve) => setImmediate(resolve));
     this.store.hydrateGraph();
 
     this.updateProjectSummary();
@@ -238,6 +239,21 @@ export class Indexer {
 
   private indexBatch(files: string[], batchSize = 500): void {
     for (let i = 0; i < files.length; i += batchSize) {
+      const batch = files.slice(i, i + batchSize);
+      this.store.transaction(() => {
+        for (const relPath of batch) {
+          this.indexFileInternal(relPath);
+        }
+      });
+      if (files.length > batchSize && i + batchSize < files.length) {
+        log(`  ${String(Math.min(i + batchSize, files.length))}/${String(files.length)}`);
+      }
+    }
+  }
+
+  private async indexBatchAsync(files: string[], batchSize = 500): Promise<void> {
+    for (let i = 0; i < files.length; i += batchSize) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
       const batch = files.slice(i, i + batchSize);
       this.store.transaction(() => {
         for (const relPath of batch) {

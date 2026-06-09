@@ -177,17 +177,16 @@ export async function startServer(rootDir: string): Promise<void> {
   registerGraphTools(server, resolveStore);
 
   // Connect transport before indexing so the MCP handshake completes immediately.
-  // Tool calls arriving during indexing will block until indexAll() returns.
   const transport = new StdioServerTransport();
   await server.connect(transport);
   log("MCP server connected — indexing projects...");
 
-  // Phase 2: index scripts/assets synchronously, then scenes/prefabs in background
+  // Phase 2: index scripts/assets (async with event-loop yields), then scenes/prefabs in background
   for (const { name, indexer, store } of toIndex) {
     try {
       log(`[${name}] indexing scripts and assets...`);
       const start = Date.now();
-      indexer.indexEssential();
+      await indexer.indexEssential();
       const elapsed = ((Date.now() - start) / 1000).toFixed(1);
       const summary = store.getProjectSummary();
       log(
