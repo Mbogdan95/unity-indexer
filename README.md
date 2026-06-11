@@ -105,6 +105,8 @@ The index database is stored in `.unity-indexer/` at each project root and is au
 
 ### Architecture
 
+<div align="center">
+
 ```
   ┌───────────────────────────────────────────┐
   │         Claude Code  (MCP client)         │
@@ -144,6 +146,8 @@ The index database is stored in `.unity-indexer/` at each project root and is au
   │        Assets/  ·  500 ms debounce        │
   └───────────────────────────────────────────┘
 ```
+
+</div>
 
 ---
 
