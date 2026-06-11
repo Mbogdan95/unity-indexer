@@ -103,25 +103,107 @@ The index database is stored in `.unity-indexer/` at each project root and is au
 
 ## 🏗️ How it works
 
+### Architecture
+
 ```
 ┌─────────────────────────────────────┐
 │  MCP Server (tools/resources)       │  ← Claude Code interface
 ├─────────────────────────────────────┤
-│  Query Engine                       │  ← MCP calls → SQL
+│  Query Engine                       │  ← MCP calls → SQL / graph
 ├─────────────────────────────────────┤
-│  Index Store (SQLite)               │  ← persistent structured index
+│  Index Store (SQLite + Graph)       │  ← persistent structured index
 ├─────────────────────────────────────┤
 │  Parser Pipeline                    │
-│  ├─ Scene / Prefab (.unity/.prefab) │
-│  ├─ Script (.cs via tree-sitter)    │
-│  ├─ Asset (.asset)                  │
-│  └─ Meta (.meta) + AsmDef (.asmdef) │
+│  ├─ Meta (.meta)          → GUID registry         │
+│  ├─ Script (.cs)          → tree-sitter AST       │
+│  ├─ Scene (.unity)        → GameObject hierarchy  │
+│  ├─ Prefab (.prefab)      → prefab tree           │
+│  ├─ Asset (.asset)        → ScriptableObject data │
+│  └─ AsmDef (.asmdef)      → assembly graph        │
 └─────────────────────────────────────┘
 ```
 
-A file watcher (chokidar) detects changes → parsers extract structured data → SQLite index updates incrementally → MCP tools query on demand.
+---
 
-C# parsing uses tree-sitter to extract class members, signatures, and relationships. Method bodies are not stored in the index — instead, tools return `file_path` and line numbers so Claude can fetch exactly what it needs with the `Read` tool.
+### Indexing pipeline
+
+On first run, unity-indexer walks `Assets/` and indexes files in four ordered phases:
+
+| Phase                | Files               | Why first                                                                                              |
+| -------------------- | ------------------- | ------------------------------------------------------------------------------------------------------ |
+| 1 — Meta             | `.meta`             | Builds the GUID → file path registry. Every subsequent parser needs this to resolve asset references.  |
+| 2 — Scripts          | `.cs`               | Populates the class registry. Scene/prefab parsers need class names to resolve component script GUIDs. |
+| 3 — Scenes & Prefabs | `.unity`, `.prefab` | Resolves GUIDs to class names using phases 1 & 2. Builds the full GameObject hierarchy.                |
+| 4 — Assets & AsmDefs | `.asset`, `.asmdef` | ScriptableObject data and assembly dependency graph.                                                   |
+
+Each file is checked with a two-stage guard before parsing: **mtime check** (fast — skips unchanged files) then **SHA-256 content hash** (catches content changes without mtime change). Only changed files are re-parsed.
+
+---
+
+### C# parsing
+
+Scripts are parsed with [tree-sitter](https://tree-sitter.github.io/) using the C# WASM grammar — no external toolchain required. The parser extracts:
+
+- Class name, namespace, base class, interfaces
+- Members: fields, methods, properties, events — with access modifiers, return types, parameters, attributes, and **exact line numbers**
+- Unity-specific flags: `MonoBehaviour`, `ScriptableObject`, `Editor` subclass detection
+- Relationships: what this class calls, inherits, implements, uses, or subscribes to
+
+Method bodies are **not stored** in the index. Instead, tools return `file_path` + `start_line`/`end_line` for each member, so Claude can fetch only the bodies it needs with the `Read` tool.
+
+---
+
+### Code graph
+
+Relationships between C# classes are stored as a directed graph (powered by [graphology](https://graphology.github.io/)) with five edge types:
+
+| Edge            | Meaning                                  |
+| --------------- | ---------------------------------------- |
+| `INHERITS`      | Class extends another class              |
+| `IMPLEMENTS`    | Class implements an interface            |
+| `CALLS`         | Method calls a method on another class   |
+| `SUBSCRIBES_TO` | Event subscription (`+=`)                |
+| `USES`          | Field/property reference to another type |
+
+Graph tools (`trace_dependencies`, `find_path`, `detect_cycles`, etc.) load this graph in-memory from `graph_edges` in SQLite and run graphology algorithms over it.
+
+---
+
+### Incremental updates
+
+The file watcher monitors `Assets/` (not `Packages/` — rarely changes). Changes are batched with a **500 ms debounce** to avoid thrashing during large saves. When more than 50 files change within a 2-second window (e.g. a git checkout), the indexer switches to bulk mode and reindexes everything affected at once.
+
+---
+
+### Importance scoring & summaries
+
+Every file and GameObject gets a float `importance_score [0, 1]` based on:
+
+- Incoming reference count (how many other files reference it)
+- Presence of custom scripts
+- Change frequency
+- Hierarchy depth (for GameObjects)
+
+Scores are used to rank results. High-importance items surface first without Claude needing to sort.
+
+Pre-computed one-line summaries are stored alongside structured data (e.g. `component_summary`, `api_summary`, `subtree_summary`). Most tool responses return these summaries by default — drill-down calls fetch full detail only when needed.
+
+---
+
+### SQLite schema (key tables)
+
+| Table            | Contents                                                                 |
+| ---------------- | ------------------------------------------------------------------------ |
+| `files`          | Every indexed file with type, hash, mtime, importance score              |
+| `guids`          | GUID → file path mapping from `.meta` files                              |
+| `game_objects`   | GameObject hierarchy with component summary + subtree summary            |
+| `components`     | Component type, script GUID, serialized fields (default values stripped) |
+| `scripts`        | C# class metadata: namespace, base class, interfaces, assembly           |
+| `script_members` | Fields, methods, properties with signatures and line numbers             |
+| `references`     | GUID-based cross-file references (scene/prefab → script/asset)           |
+| `graph_edges`    | Code relationship graph (INHERITS, CALLS, USES, etc.)                    |
+| `change_log`     | Timestamped file change history                                          |
+| `assemblies`     | `.asmdef` data with dependency graph                                     |
 
 ---
 
