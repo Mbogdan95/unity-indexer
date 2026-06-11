@@ -106,21 +106,43 @@ The index database is stored in `.unity-indexer/` at each project root and is au
 ### Architecture
 
 ```
-┌─────────────────────────────────────┐
-│  MCP Server (tools/resources)       │  ← Claude Code interface
-├─────────────────────────────────────┤
-│  Query Engine                       │  ← MCP calls → SQL / graph
-├─────────────────────────────────────┤
-│  Index Store (SQLite + Graph)       │  ← persistent structured index
-├─────────────────────────────────────┤
-│  Parser Pipeline                    │
-│  ├─ Meta (.meta)          → GUID registry         │
-│  ├─ Script (.cs)          → tree-sitter AST       │
-│  ├─ Scene (.unity)        → GameObject hierarchy  │
-│  ├─ Prefab (.prefab)      → prefab tree           │
-│  ├─ Asset (.asset)        → ScriptableObject data │
-│  └─ AsmDef (.asmdef)      → assembly graph        │
-└─────────────────────────────────────┘
+  ┌───────────────────────────────────────────┐
+  │         Claude Code  (MCP client)         │
+  └─────────────────────┬─────────────────────┘
+                        │ 22 MCP tool calls
+  ┌─────────────────────▼─────────────────────┐
+  │               MCP Server                  │
+  └─────────────────────┬─────────────────────┘
+                        │ SQL + graph queries
+  ┌─────────────────────▼─────────────────────┐
+  │              Index Store                  │
+  │                                           │
+  │  SQLite                Graphology         │
+  │  ├─ files              (in-memory)        │
+  │  ├─ game_objects       ├─ INHERITS        │
+  │  ├─ components         ├─ IMPLEMENTS      │
+  │  ├─ scripts            ├─ CALLS           │
+  │  ├─ script_members     ├─ SUBSCRIBES_TO   │
+  │  ├─ guids              └─ USES            │
+  │  ├─ references                            │
+  │  └─ graph_edges ──────▶ loaded on start   │
+  └─────────────────────┬─────────────────────┘
+                        │ parse & upsert
+  ┌─────────────────────▼─────────────────────┐
+  │            Parser Pipeline                │
+  │                                           │
+  │  .meta    ──▶  GUID registry              │
+  │  .cs      ──▶  tree-sitter AST            │
+  │  .unity   ──▶  scene hierarchy            │
+  │  .prefab  ──▶  prefab tree                │
+  │  .asset   ──▶  ScriptableObject fields    │
+  │  .asmdef  ──▶  assembly dependencies      │
+  └─────────────────────┬─────────────────────┘
+                        │ file events
+  ┌─────────────────────▼─────────────────────┐
+  │        File Watcher  (chokidar)           │
+  │        Assets/  ·  500 ms debounce        │
+  └───────────────────────────────────────────┘
 ```
 
 ---
