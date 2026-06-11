@@ -1,17 +1,47 @@
+<div align="center">
+
 # unity-indexer
+
+**Token-efficient Unity project explorer for Claude Code**
 
 [![npm version](https://img.shields.io/npm/v/unity-indexer)](https://www.npmjs.com/package/unity-indexer)
 [![license](https://img.shields.io/npm/l/unity-indexer)](LICENSE)
+[![node](https://img.shields.io/node/v/unity-indexer)](package.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6)](tsconfig.json)
 
-Token-efficient Unity project explorer for Claude Code.
+[Quick Start](#-quick-start) • [Installation](#-installation) • [How it works](#️-how-it-works) • [Tools](#-available-tools) • [Development](#️-development)
 
-## What it does
+</div>
 
-unity-indexer indexes a Unity project — scenes, prefabs, C# scripts, and assets — into a SQLite database and exposes 22 MCP tools so Claude can explore the project via structured queries. Instead of reading raw `.unity`, `.prefab`, and `.asset` files (Unity's non-standard YAML with GUIDs), Claude calls purpose-built tools that return exactly the data needed.
+---
+
+unity-indexer indexes a Unity project — scenes, prefabs, C# scripts, and assets — into a SQLite database and exposes 22 MCP tools so Claude can explore the project via structured queries. Instead of reading raw `.unity`, `.prefab`, and `.asset` files (Unity's non-standard YAML with GUIDs), Claude calls purpose-built tools that return exactly what's needed.
 
 Works as a Claude Code plugin (MCP server auto-registered on install) or as a standalone npm package.
 
-## Installation
+---
+
+## ⚡ Quick Start
+
+**Claude Code plugin — zero config:**
+
+```text
+/plugins install github:Mbogdan95/unity-indexer
+```
+
+> [!TIP]
+> That's it. The MCP server auto-registers and tools are available immediately.
+
+**npm — manual setup:**
+
+```bash
+npx unity-indexer install            # register in Claude Code settings
+npx unity-indexer <path-to-project>  # start the server
+```
+
+---
+
+## 📦 Installation
 
 ### Claude Code Plugin
 
@@ -19,7 +49,8 @@ Works as a Claude Code plugin (MCP server auto-registered on install) or as a st
 /plugins install github:Mbogdan95/unity-indexer
 ```
 
-The MCP server is auto-registered — no manual configuration needed.
+> [!NOTE]
+> The MCP server is auto-registered when the plugin is installed — no manual configuration needed.
 
 ### npm / Manual
 
@@ -47,25 +78,30 @@ The `install` command writes to Claude Code settings. Use `--scope` to control w
 unity-indexer install --scope project
 ```
 
-## Starting the server
+---
 
-**Direct path** — index a specific project:
+## 🚀 Starting the server
+
+**Direct path** — index a specific Unity project:
 
 ```bash
 npx unity-indexer <path-to-unity-project>
 ```
 
-**Auto-discovery** — scan for Unity projects automatically:
+**Auto-discovery** — scan the current directory for Unity projects:
 
 ```bash
 npx unity-indexer
 ```
 
-With no arguments, unity-indexer scans the current directory up to 3 levels deep for Unity projects (directories containing both `Assets/` and `ProjectSettings/`). All discovered projects are indexed.
+> [!NOTE]
+> With no arguments, unity-indexer scans up to 3 levels deep for directories containing both `Assets/` and `ProjectSettings/`. All discovered projects are indexed and available via the `project:` parameter.
 
-The database is stored in `.unity-indexer/` at each project root and is automatically added to `.gitignore`.
+The index database is stored in `.unity-indexer/` at each project root and is automatically added to `.gitignore`.
 
-## How it works
+---
+
+## 🏗️ How it works
 
 ```
 ┌─────────────────────────────────────┐
@@ -83,13 +119,18 @@ The database is stored in `.unity-indexer/` at each project root and is automati
 └─────────────────────────────────────┘
 ```
 
-A file watcher (chokidar) detects changes, parsers extract structured data, and the index is updated incrementally. MCP tools query SQLite on demand — no file reads at query time.
+A file watcher (chokidar) detects changes → parsers extract structured data → SQLite index updates incrementally → MCP tools query on demand.
 
-C# parsing uses tree-sitter to extract signatures, members, and relationships. Method bodies are not stored; tools return `file_path` and line numbers so Claude can fetch only what it needs with the `Read` tool.
+C# parsing uses tree-sitter to extract class members, signatures, and relationships. Method bodies are not stored in the index — instead, tools return `file_path` and line numbers so Claude can fetch exactly what it needs with the `Read` tool.
 
-## Available Tools
+---
 
-### Scene & Prefab
+## 🔧 Available Tools
+
+<details>
+<summary><strong>🎬 Scene &amp; Prefab</strong> — 4 tools</summary>
+
+<br>
 
 | Tool                   | Description                                                                              |
 | ---------------------- | ---------------------------------------------------------------------------------------- |
@@ -98,7 +139,12 @@ C# parsing uses tree-sitter to extract signatures, members, and relationships. M
 | `get_game_object`      | Full details (components, children) for a specific GameObject.                           |
 | `get_component`        | A specific component on a named GameObject.                                              |
 
-### Scripts (C#)
+</details>
+
+<details>
+<summary><strong>📜 Scripts (C#)</strong> — 4 tools</summary>
+
+<br>
 
 | Tool                      | Description                                                                                                           |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
@@ -107,7 +153,12 @@ C# parsing uses tree-sitter to extract signatures, members, and relationships. M
 | `batch_get_script_detail` | Same as `get_script_detail` for multiple classes in one call.                                                         |
 | `get_script_member`       | Details for a single member of a C# class.                                                                            |
 
-### References & Dependencies
+</details>
+
+<details>
+<summary><strong>🔗 References &amp; Dependencies</strong> — 3 tools</summary>
+
+<br>
 
 | Tool                | Description                                                                                   |
 | ------------------- | --------------------------------------------------------------------------------------------- |
@@ -115,7 +166,12 @@ C# parsing uses tree-sitter to extract signatures, members, and relationships. M
 | `find_dependencies` | Outgoing references from a file, class, or GUID.                                              |
 | `resolve_guid`      | Resolve a Unity GUID to a file path and asset type.                                           |
 
-### Graph
+</details>
+
+<details>
+<summary><strong>🕸️ Graph</strong> — 7 tools</summary>
+
+<br>
 
 | Tool                 | Description                                            |
 | -------------------- | ------------------------------------------------------ |
@@ -127,7 +183,12 @@ C# parsing uses tree-sitter to extract signatures, members, and relationships. M
 | `get_graph_stats`    | Graph metrics: node counts, edge counts, density.      |
 | `find_implementors`  | All classes implementing a given interface.            |
 
-### Search & Assets
+</details>
+
+<details>
+<summary><strong>🔍 Search &amp; Assets</strong> — 4 tools</summary>
+
+<br>
 
 | Tool              | Description                                                   |
 | ----------------- | ------------------------------------------------------------- |
@@ -136,13 +197,23 @@ C# parsing uses tree-sitter to extract signatures, members, and relationships. M
 | `list_assets`     | Unity `.asset` files, optionally filtered by type name.       |
 | `recent_changes`  | Files changed recently. Pass an ISO 8601 timestamp to filter. |
 
-## Multiple projects
+</details>
 
-When multiple Unity projects are indexed, pass `project: "<name>"` to scope any tool call. The project name is the directory name of the Unity project root.
+---
+
+## 📁 Multiple projects
+
+When multiple Unity projects are indexed, pass `project: "<name>"` to scope any tool call to a specific project. The project name is the directory name of the Unity project root.
+
+```
+project: "MyGame"
+```
 
 Omit the parameter when only one project is indexed.
 
-## Development
+---
+
+## 🛠️ Development
 
 Node.js >= 18 required.
 
@@ -154,6 +225,8 @@ npm run lint       # eslint
 npm run ci         # typecheck + lint + format-check + test + build
 ```
 
-## License
+---
+
+## 📄 License
 
 [MIT](LICENSE)
