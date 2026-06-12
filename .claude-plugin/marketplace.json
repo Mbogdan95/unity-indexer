@@ -1,0 +1,21 @@
+{
+  "name": "unity-indexer",
+  "description": "Unity project MCP tools for Claude Code",
+  "owner": {
+    "name": "Bogdan Manta"
+  },
+  "plugins": [
+    {
+      "name": "unity-indexer",
+      "source": ".",
+      "description": "Token-efficient Unity project code explorer. Provides tools for searching scripts, finding references, inspecting types, and navigating Unity-specific patterns.",
+      "author": {
+        "name": "Bogdan Manta"
+      },
+      "homepage": "https://github.com/Mbogdan95/unity-indexer",
+      "repository": "https://github.com/Mbogdan95/unity-indexer",
+      "license": "MIT",
+      "keywords": ["unity", "mcp", "game-dev", "csharp", "indexer"]
+    }
+  ]
+}
