@@ -26,11 +26,12 @@ Works as a Claude Code plugin (MCP server auto-registered on install) or as a st
 **Claude Code plugin — zero config:**
 
 ```text
-/plugins install github:Mbogdan95/unity-indexer
+/plugin marketplace add Mbogdan95/unity-indexer
+/plugin install unity-indexer@unity-indexer
 ```
 
 > [!TIP]
-> That's it. The MCP server auto-registers and tools are available immediately.
+> The MCP server auto-registers on install. Tools are available immediately in the next session.
 
 **npm — manual setup:**
 
@@ -46,7 +47,8 @@ npx unity-indexer <path-to-project>  # start the server
 ### Claude Code Plugin
 
 ```text
-/plugins install github:Mbogdan95/unity-indexer
+/plugin marketplace add Mbogdan95/unity-indexer
+/plugin install unity-indexer@unity-indexer
 ```
 
 > [!NOTE]
@@ -323,7 +325,7 @@ Omit the parameter when only one project is indexed.
 
 ## 🛠️ Development
 
-Node.js >= 18 required.
+Node.js >= 20.17.0 required.
 
 ```bash
 npm run build      # compile TypeScript
