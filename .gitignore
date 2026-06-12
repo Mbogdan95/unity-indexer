@@ -1,5 +1,5 @@
 node_modules/
-dist/
+# dist/ intentionally not ignored — committed so the Claude Code plugin works without npm publish
 *.db
 *.db-wal
 *.db-shm

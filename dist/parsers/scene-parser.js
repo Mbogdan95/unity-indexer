@@ -1,0 +1,159 @@
+import { parseUnityYaml, extractReferences } from "./unity-yaml.js";
+import { stripDefaults } from "./defaults.js";
+import { UNITY_CLASS_IDS } from "../types.js";
+export function parseScene(content) {
+    const docs = parseUnityYaml(content);
+    return buildScene(docs);
+}
+export function buildScene(docs) {
+    // Index all docs by fileId for fast lookup
+    const docByFileId = new Map();
+    for (const doc of docs) {
+        docByFileId.set(doc.fileId, doc);
+    }
+    // Collect all GameObject docs (classId === 1)
+    const goDocs = docs.filter((d) => d.classId === 1);
+    // Build Transform → GameObject mapping
+    // Transform docs (classId === 4) have m_GameObject back-ref
+    const transformToGo = new Map(); // transformFileId → goFileId
+    for (const doc of docs) {
+        if (doc.classId === 4) {
+            const data = doc.data[doc.typeName] ??
+                doc.data["Transform"];
+            if (!data)
+                continue;
+            const goRef = data["m_GameObject"];
+            if (goRef !== undefined) {
+                const rawFileID = goRef["fileID"];
+                const goFileId = typeof rawFileID === "string"
+                    ? rawFileID
+                    : typeof rawFileID === "number"
+                        ? String(rawFileID)
+                        : "";
+                if (goFileId !== "" && goFileId !== "0") {
+                    transformToGo.set(doc.fileId, goFileId);
+                }
+            }
+        }
+    }
+    // Build hierarchy: for each GO, find parent GO via Transform.m_Father
+    const parentMap = new Map(); // goFileId → parentGoFileId | null
+    for (const doc of docs) {
+        if (doc.classId === 4) {
+            const data = getDocData(doc);
+            if (!data)
+                continue;
+            const fatherRef = data["m_Father"];
+            const ownerGoFileId = transformToGo.get(doc.fileId);
+            if (ownerGoFileId === undefined)
+                continue;
+            if (fatherRef !== undefined) {
+                const rawFatherID = fatherRef["fileID"];
+                const fatherFileId = typeof rawFatherID === "string"
+                    ? rawFatherID
+                    : typeof rawFatherID === "number"
+                        ? String(rawFatherID)
+                        : "0";
+                if (fatherFileId !== "" && fatherFileId !== "0") {
+                    // fatherFileId is parent Transform's fileId → map to parent GO
+                    const parentGoFileId = transformToGo.get(fatherFileId) ?? null;
+                    parentMap.set(ownerGoFileId, parentGoFileId);
+                }
+                else {
+                    parentMap.set(ownerGoFileId, null);
+                }
+            }
+            else {
+                parentMap.set(ownerGoFileId, null);
+            }
+        }
+    }
+    // Collect all references from the entire document set
+    const allReferences = [];
+    for (const doc of docs) {
+        const refs = extractReferences(doc.data, `${doc.typeName}:${doc.fileId}`);
+        allReferences.push(...refs);
+    }
+    // Build GameObjects
+    const gameObjects = [];
+    for (const goDoc of goDocs) {
+        const data = getDocData(goDoc);
+        if (!data)
+            continue;
+        const rawName = data["m_Name"];
+        const name = typeof rawName === "string" ? rawName : "";
+        const layer = Number(data["m_Layer"] ?? 0);
+        const rawTag = data["m_TagString"];
+        const tag = typeof rawTag === "string" ? rawTag : "Untagged";
+        const active = Number(data["m_IsActive"] ?? 1) !== 0;
+        const parentGoFileId = parentMap.get(goDoc.fileId) ?? null;
+        // Extract component fileIds from m_Component list
+        const componentRefs = data["m_Component"] ?? [];
+        const components = [];
+        for (let order = 0; order < componentRefs.length; order++) {
+            const compRef = componentRefs[order];
+            const componentEntry = compRef["component"];
+            if (componentEntry === undefined)
+                continue;
+            const rawCompFileID = componentEntry["fileID"];
+            const compFileId = typeof rawCompFileID === "string"
+                ? rawCompFileID
+                : typeof rawCompFileID === "number"
+                    ? String(rawCompFileID)
+                    : "";
+            if (compFileId === "" || compFileId === "0")
+                continue;
+            const compDoc = docByFileId.get(compFileId);
+            if (!compDoc)
+                continue;
+            const compData = getDocData(compDoc);
+            if (!compData)
+                continue;
+            const typeName = UNITY_CLASS_IDS[compDoc.classId] ?? compDoc.typeName;
+            // Extract script GUID for MonoBehaviour
+            let scriptGuid = null;
+            if (compDoc.classId === 114) {
+                const scriptRef = compData["m_Script"];
+                if (scriptRef !== undefined && typeof scriptRef["guid"] === "string") {
+                    scriptGuid = scriptRef["guid"];
+                }
+            }
+            // Strip defaults and remove infrastructure fields
+            const stripped = stripDefaults(typeName, compData);
+            delete stripped["m_GameObject"];
+            if (compDoc.classId === 114) {
+                delete stripped["m_Script"];
+            }
+            components.push({
+                fileIdLocal: compFileId,
+                typeName,
+                scriptGuid,
+                order,
+                serializedFields: stripped,
+                gameObjectFileId: goDoc.fileId,
+            });
+        }
+        gameObjects.push({
+            fileIdLocal: goDoc.fileId,
+            name,
+            parentFileIdLocal: parentGoFileId,
+            active,
+            layer,
+            tag,
+            components,
+        });
+    }
+    return { gameObjects, references: allReferences };
+}
+function getDocData(doc) {
+    // Document data is keyed by type name, e.g. { "GameObject": {...} }
+    // Try the typeName first, then the first key
+    const byTypeName = doc.data[doc.typeName];
+    if (byTypeName)
+        return byTypeName;
+    const firstKey = Object.keys(doc.data)[0];
+    if (firstKey)
+        return doc.data[firstKey];
+    return undefined;
+}
+//# sourceMappingURL=scene-parser.js.map
