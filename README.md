@@ -31,7 +31,7 @@ Works as a Claude Code plugin (MCP server auto-registered on install) or as a st
 ```
 
 > [!TIP]
-> The MCP server auto-registers on install. Tools are available immediately in the next session.
+> MCP server auto-registers on install. Tools are available in the next session.
 
 **npm — manual setup:**
 
@@ -52,7 +52,7 @@ npx unity-indexer <path-to-project>  # start the server
 ```
 
 > [!NOTE]
-> The MCP server is auto-registered when the plugin is installed — no manual configuration needed.
+> MCP server auto-registers on install — no manual configuration needed.
 
 ### npm / Manual
 
@@ -67,7 +67,7 @@ unity-indexer install
 unity-indexer <project-path>
 ```
 
-The `install` command writes to Claude Code settings. Use `--scope` to control which settings file:
+`install` writes to Claude Code settings. Use `--scope` to select the settings file:
 
 | Scope              | File                            |
 | ------------------ | ------------------------------- |
@@ -97,9 +97,9 @@ npx unity-indexer
 ```
 
 > [!NOTE]
-> With no arguments, unity-indexer scans up to 3 levels deep for directories containing both `Assets/` and `ProjectSettings/`. All discovered projects are indexed and available via the `project:` parameter.
+> With no arguments, unity-indexer scans 3 levels deep for directories containing `Assets/` and `ProjectSettings/`. All found projects are indexed and available via `project:`.
 
-The index database is stored in `.unity-indexer/` at each project root and is automatically added to `.gitignore`.
+The index database is stored in `.unity-indexer/` at each project root and auto-added to `.gitignore`.
 
 ---
 
@@ -155,7 +155,7 @@ The index database is stored in `.unity-indexer/` at each project root and is au
 
 ### Indexing pipeline
 
-On first run, unity-indexer walks `Assets/` and indexes files in four ordered phases:
+On first run, unity-indexer walks `Assets/` and indexes files in four phases:
 
 | Phase                | Files               | Why first                                                                                              |
 | -------------------- | ------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -164,26 +164,26 @@ On first run, unity-indexer walks `Assets/` and indexes files in four ordered ph
 | 3 — Scenes & Prefabs | `.unity`, `.prefab` | Resolves GUIDs to class names using phases 1 & 2. Builds the full GameObject hierarchy.                |
 | 4 — Assets & AsmDefs | `.asset`, `.asmdef` | ScriptableObject data and assembly dependency graph.                                                   |
 
-Each file is checked with a two-stage guard before parsing: **mtime check** (fast — skips unchanged files) then **SHA-256 content hash** (catches content changes without mtime change). Only changed files are re-parsed.
+Each file passes a two-stage guard before parsing: **mtime check** (fast — skips unchanged files) then **SHA-256 content hash** (catches content changes with no mtime update). Only changed files are re-parsed.
 
 ---
 
 ### C# parsing
 
-Scripts are parsed with [tree-sitter](https://tree-sitter.github.io/) using the C# WASM grammar — no external toolchain required. The parser extracts:
+Scripts are parsed with [tree-sitter](https://tree-sitter.github.io/) (C# WASM grammar — no external toolchain). The parser extracts:
 
 - Class name, namespace, base class, interfaces
 - Members: fields, methods, properties, events — with access modifiers, return types, parameters, attributes, and **exact line numbers**
 - Unity-specific flags: `MonoBehaviour`, `ScriptableObject`, `Editor` subclass detection
 - Relationships: what this class calls, inherits, implements, uses, or subscribes to
 
-Method bodies are **not stored** in the index. Instead, tools return `file_path` + `start_line`/`end_line` for each member, so Claude can fetch only the bodies it needs with the `Read` tool.
+Method bodies are **not stored**. Tools return `file_path` + `start_line`/`end_line` per member — fetch bodies on demand with `Read`.
 
 ---
 
 ### Code graph
 
-Relationships between C# classes are stored as a directed graph (powered by [graphology](https://graphology.github.io/)) with five edge types:
+C# class relationships are stored as a directed graph ([graphology](https://graphology.github.io/)) with five edge types:
 
 | Edge            | Meaning                                  |
 | --------------- | ---------------------------------------- |
@@ -199,22 +199,22 @@ Graph tools (`trace_dependencies`, `find_path`, `detect_cycles`, etc.) load this
 
 ### Incremental updates
 
-The file watcher monitors `Assets/` (not `Packages/` — rarely changes). Changes are batched with a **500 ms debounce** to avoid thrashing during large saves. When more than 50 files change within a 2-second window (e.g. a git checkout), the indexer switches to bulk mode and reindexes everything affected at once.
+The file watcher monitors `Assets/` (not `Packages/` — rarely changes). Changes batch with a **500 ms debounce** to avoid thrashing on large saves. When more than 50 files change within 2 seconds (e.g. a git checkout), the indexer switches to bulk mode and reindexes all affected files.
 
 ---
 
 ### Importance scoring & summaries
 
-Every file and GameObject gets a float `importance_score [0, 1]` based on:
+Every file and GameObject gets a float `importance_score [0, 1]` from:
 
 - Incoming reference count (how many other files reference it)
 - Presence of custom scripts
 - Change frequency
 - Hierarchy depth (for GameObjects)
 
-Scores are used to rank results. High-importance items surface first without Claude needing to sort.
+Scores rank results — high-importance items surface first.
 
-Pre-computed one-line summaries are stored alongside structured data (e.g. `component_summary`, `api_summary`, `subtree_summary`). Most tool responses return these summaries by default — drill-down calls fetch full detail only when needed.
+Pre-computed one-line summaries (`component_summary`, `api_summary`, `subtree_summary`) are stored alongside structured data. Most tools return summaries by default; drill-down calls fetch full detail on demand.
 
 ---
 
@@ -313,13 +313,13 @@ Pre-computed one-line summaries are stored alongside structured data (e.g. `comp
 
 ## 📁 Multiple projects
 
-When multiple Unity projects are indexed, pass `project: "<name>"` to scope any tool call to a specific project. The project name is the directory name of the Unity project root.
+When multiple projects are indexed, pass `project: "<name>"` to scope any tool call. The name is the directory name of the Unity project root.
 
 ```
 project: "MyGame"
 ```
 
-Omit the parameter when only one project is indexed.
+Omit it when only one project is indexed.
 
 ---
 
