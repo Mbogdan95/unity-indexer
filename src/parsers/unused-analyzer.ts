@@ -30,7 +30,7 @@ export interface UnusedMethod {
   access: string;
   signature: string;
   line: number;
-  called_by_classes?: string[];
+  may_be_called_externally?: boolean;
 }
 
 export interface ClassUnusedResult {
@@ -65,6 +65,36 @@ export interface AnalyzeFileInput {
 // ============================================================
 // Constants
 // ============================================================
+
+const NAMESPACE_COMMON_TYPES: Record<string, string[]> = {
+  Generic: ["List", "Dictionary", "HashSet", "Queue", "Stack", "SortedDictionary", "LinkedList"],
+  Linq: ["Enumerable", "IQueryable", "IOrderedEnumerable"],
+  Collections: ["IEnumerable", "IList", "ArrayList", "Hashtable"],
+  UI: [
+    "Image",
+    "Text",
+    "Button",
+    "Toggle",
+    "Slider",
+    "InputField",
+    "Dropdown",
+    "ScrollRect",
+    "CanvasScaler",
+  ],
+  Events: ["UnityEvent", "UnityAction"],
+  Serialization: ["JsonUtility", "SerializeField"],
+  SceneManagement: ["SceneManager", "Scene", "LoadSceneMode"],
+  AI: ["NavMeshAgent", "NavMeshPath", "NavMesh"],
+  Physics2D: [],
+  Rendering: ["CommandBuffer", "RenderPipeline", "Camera"],
+  Audio: ["AudioMixer", "AudioMixerGroup"],
+  Assertions: ["Assert"],
+  Diagnostics: ["Stopwatch", "Debug", "Trace"],
+  IO: ["File", "Directory", "Path", "Stream", "FileStream", "StreamReader", "StreamWriter"],
+  Text: ["StringBuilder", "Regex", "Encoding"],
+  Threading: ["Thread", "Task", "Mutex", "Monitor", "Interlocked"],
+  Tasks: ["Task", "TaskCompletionSource", "CancellationToken", "CancellationTokenSource"],
+};
 
 const UNITY_LIFECYCLE_METHODS = new Set([
   "Awake",
@@ -178,10 +208,13 @@ function analyzeUsings(root: Node, classBodies: ClassBodyRange[]): UnusedUsing[]
     if (text.includes("=")) continue;
 
     // Extract namespace: strip "using " prefix and ";" suffix
-    const namespaceName = text
+    let namespaceName = text
       .replace(/^using\s+/, "")
       .replace(/;$/, "")
       .trim();
+    if (namespaceName.startsWith("static ")) {
+      namespaceName = namespaceName.slice(7).trim();
+    }
 
     // Last segment after last "."
     const dotIndex = namespaceName.lastIndexOf(".");
@@ -189,7 +222,10 @@ function analyzeUsings(root: Node, classBodies: ClassBodyRange[]): UnusedUsing[]
 
     const line = child.startPosition.row + 1;
 
-    if (!fileIdentifiers.has(lastSegment)) {
+    const extraTypes = NAMESPACE_COMMON_TYPES[lastSegment] ?? [];
+    const isUsed =
+      fileIdentifiers.has(lastSegment) || extraTypes.some((t) => fileIdentifiers.has(t));
+    if (!isUsed) {
       unused.push({ name: namespaceName, line });
     }
   }
@@ -229,19 +265,18 @@ function analyzeFields(
     if (member.kind !== "field") continue;
     if (member.access === "public") continue;
     if (member.has_serialize_field) continue;
+    if (member.has_header_attr) continue;
 
     // Check attributes JSON for SerializeField or Header
-    let attrs: string[] = [];
     try {
       const parsed: unknown = JSON.parse(member.attributes);
       if (Array.isArray(parsed)) {
-        attrs = (parsed as unknown[]).filter((x): x is string => typeof x === "string");
+        const attrs = (parsed as unknown[]).filter((x): x is string => typeof x === "string");
+        if (attrs.includes("SerializeField") || attrs.includes("Header")) continue;
       }
     } catch {
-      // ignore JSON parse errors
+      // malformed JSON — proceed with analysis
     }
-
-    if (attrs.includes("SerializeField") || attrs.includes("Header")) continue;
 
     const count = identifierCounts.get(member.name) ?? 0;
     // UNUSED if count <= 1 (declaration itself counts as one occurrence)
@@ -376,17 +411,11 @@ function analyzeMethods(
         .replace(/\s*\{?\s*$/, "");
       const line = method.startPosition.row + 1;
 
+      const unusedMethod: UnusedMethod = { name, access, signature, line };
       if (classInput.externalCallerClassNames.length > 0) {
-        unused.push({
-          name,
-          access,
-          signature,
-          line,
-          called_by_classes: classInput.externalCallerClassNames,
-        });
-      } else {
-        unused.push({ name, access, signature, line });
+        unusedMethod.may_be_called_externally = true;
       }
+      unused.push(unusedMethod);
     }
   });
 
