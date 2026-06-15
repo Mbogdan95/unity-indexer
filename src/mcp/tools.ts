@@ -633,13 +633,14 @@ export function handleFindUnused(
 
   if (params.class_name !== undefined) {
     const s = store.getScriptByClassName(params.class_name);
-    if (!s) return { error: `Script not found: ${params.class_name}` };
+    if (!s) return { token_hint: 10, error: `Script not found: ${params.class_name}` };
     scripts = [s];
   } else if (params.file_path !== undefined) {
     const file = store.getFileByPath(store.stripPrefix(params.file_path));
-    if (!file) return { error: `File not found: ${params.file_path}` };
+    if (!file) return { token_hint: 10, error: `File not found: ${params.file_path}` };
     scripts = store.listScripts({}).filter((s) => s.file_id === file.id);
-    if (scripts.length === 0) return { error: `No scripts indexed for: ${params.file_path}` };
+    if (scripts.length === 0)
+      return { token_hint: 10, error: `No scripts indexed for: ${params.file_path}` };
   } else {
     scripts = store.listScripts({
       namespace: params.namespace,
@@ -738,7 +739,7 @@ export function handleFindUnused(
     ),
   };
 
-  return { files: results, summary };
+  return { token_hint: Math.max(50, results.length * 20), files: results, summary };
 }
 
 // ---------------------------------------------------------------------------
