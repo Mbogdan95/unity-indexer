@@ -183,6 +183,27 @@ public class Foo {
     const fooClass = result.classes.find((c) => c.class_name === "Foo");
     expect(fooClass?.unused_fields.map((f) => f.name) ?? []).not.toContain("_speed");
   });
+
+  it("does not flag field with has_header_attr = true", () => {
+    const content = `
+    public class Foo {
+      private string _label;
+    }
+  `;
+    const result = analyzeFile({
+      content,
+      filePath: "test/Foo.cs",
+      classes: [
+        makeClass({
+          className: "Foo",
+          members: [
+            makeMember({ name: "_label", kind: "field", access: "private", has_header_attr: true }),
+          ],
+        }),
+      ],
+    });
+    expect(result.classes[0]?.unused_fields.map((f) => f.name) ?? []).not.toContain("_label");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -403,9 +424,8 @@ public class ClassB {
   });
 
   it("does not bleed unused findings between classes", () => {
-    // ClassA has _sharedName field, ClassB has a method called _sharedName
-    // The field in ClassA should still be flagged since the method in ClassB
-    // lives in a different class body scope
+    // ClassA has _onlyInA (unused), ClassB has _onlyInB (used inside UseOnlyInB).
+    // _onlyInB must not bleed into ClassA's scope and suppress _onlyInA.
     const content = `
 public class ClassA {
   private int _onlyInA;
@@ -442,6 +462,28 @@ public class ClassB {
     expect(classAResult?.unused_fields.map((f) => f.name)).toContain("_onlyInA");
     // _onlyInB should NOT be flagged (referenced inside UseOnlyInB)
     expect(classBResult?.unused_fields.map((f) => f.name) ?? []).not.toContain("_onlyInB");
+  });
+
+  it("skips classes marked as isGenerated", () => {
+    const content = `
+    public class GeneratedClass {
+      private int _unusedField;
+    }
+  `;
+    const result = analyzeFile({
+      content,
+      filePath: "test/Generated.cs",
+      classes: [
+        {
+          scriptId: 1,
+          className: "GeneratedClass",
+          isGenerated: true,
+          members: [makeMember({ name: "_unusedField", kind: "field", access: "private" })],
+          externalCallerClassNames: [],
+        },
+      ],
+    });
+    expect(result.classes).toHaveLength(0);
   });
 });
 
@@ -574,5 +616,26 @@ describe("integration: UnusedSymbols.cs fixture", () => {
     const result = buildResult();
     const cls = result.classes.find((c) => c.class_name === "AnotherClass");
     expect(cls?.unused_methods.map((m) => m.name) ?? []).not.toContain("Start");
+  });
+
+  it("does not flag UsedMethod (called within file)", () => {
+    const result = buildResult();
+    const unusedSymbols = result.classes.find((c) => c.class_name === "UnusedSymbols");
+    const names = unusedSymbols?.unused_methods.map((m) => m.name) ?? [];
+    expect(names).not.toContain("UsedMethod");
+  });
+
+  it("does not flag _usedField (referenced in Awake)", () => {
+    const result = buildResult();
+    const unusedSymbols = result.classes.find((c) => c.class_name === "UnusedSymbols");
+    const names = unusedSymbols?.unused_fields.map((f) => f.name) ?? [];
+    expect(names).not.toContain("_usedField");
+  });
+
+  it("does not flag _usedList (referenced in PublicMethod)", () => {
+    const result = buildResult();
+    const unusedSymbols = result.classes.find((c) => c.class_name === "UnusedSymbols");
+    const names = unusedSymbols?.unused_fields.map((f) => f.name) ?? [];
+    expect(names).not.toContain("_usedList");
   });
 });
