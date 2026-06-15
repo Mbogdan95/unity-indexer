@@ -85,14 +85,14 @@ const NAMESPACE_COMMON_TYPES: Record<string, string[]> = {
   Serialization: ["JsonUtility", "SerializeField"],
   SceneManagement: ["SceneManager", "Scene", "LoadSceneMode"],
   AI: ["NavMeshAgent", "NavMeshPath", "NavMesh"],
-  Physics2D: [],
+  Physics2D: ["RaycastHit2D", "Collider2D", "Rigidbody2D", "ContactPoint2D"],
   Rendering: ["CommandBuffer", "RenderPipeline", "Camera"],
   Audio: ["AudioMixer", "AudioMixerGroup"],
   Assertions: ["Assert"],
   Diagnostics: ["Stopwatch", "Debug", "Trace"],
   IO: ["File", "Directory", "Path", "Stream", "FileStream", "StreamReader", "StreamWriter"],
   Text: ["StringBuilder", "Regex", "Encoding"],
-  Threading: ["Thread", "Task", "Mutex", "Monitor", "Interlocked"],
+  Threading: ["Thread", "Mutex", "Monitor", "Interlocked"],
   Tasks: ["Task", "TaskCompletionSource", "CancellationToken", "CancellationTokenSource"],
 };
 
@@ -383,6 +383,9 @@ function analyzeMethods(
 
     // Skip public methods
     if (access === "public") return;
+
+    // Skip override and abstract methods
+    if (modifiers.includes("override") || modifiers.includes("abstract")) return;
 
     // Skip Unity lifecycle methods
     if (UNITY_LIFECYCLE_METHODS.has(name)) return;
