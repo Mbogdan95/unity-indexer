@@ -177,7 +177,7 @@ function extractRootIdentifier(node: Node): string | null {
 /**
  * Walk all descendants of a node, calling visitor for each.
  */
-function walkAll(node: Node, visitor: (n: Node) => void): void {
+export function walkAll(node: Node, visitor: (n: Node) => void): void {
   visitor(node);
   for (const child of node.children) {
     walkAll(child, visitor);
@@ -188,13 +188,13 @@ function walkAll(node: Node, visitor: (n: Node) => void): void {
  * Collect all class/struct names declared in the file so we can map
  * method bodies back to their containing class.
  */
-interface ClassBodyRange {
+export interface ClassBodyRange {
   className: string;
   startIndex: number;
   endIndex: number;
 }
 
-function collectClassBodies(root: Node): ClassBodyRange[] {
+export function collectClassBodies(root: Node): ClassBodyRange[] {
   const ranges: ClassBodyRange[] = [];
 
   function walk(node: Node): void {
@@ -218,7 +218,7 @@ function collectClassBodies(root: Node): ClassBodyRange[] {
   return ranges;
 }
 
-function findSourceClass(index: number, classBodies: ClassBodyRange[]): string {
+export function findSourceClass(index: number, classBodies: ClassBodyRange[]): string {
   // Find the most specific (innermost) class body that contains this index
   let best: ClassBodyRange | null = null;
   for (const range of classBodies) {
