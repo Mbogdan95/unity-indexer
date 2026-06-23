@@ -934,6 +934,16 @@ export class Store {
     return this.prepare("SELECT * FROM graph_edges").all() as (GraphEdgeRow & { id: number })[];
   }
 
+  getGraphEdgesForFile(fileId: number): (GraphEdgeRow & { id: number })[] {
+    return this.prepare("SELECT * FROM graph_edges WHERE source_file_id = ?").all(
+      fileId,
+    ) as (GraphEdgeRow & { id: number })[];
+  }
+
+  patchGraphForFile(fileId: number, newEdges: GraphEdgeRow[]): void {
+    this.graph.patchForFile(fileId, [], newEdges);
+  }
+
   // ---------------------------------------------------------------------------
   // Transactions
   // ---------------------------------------------------------------------------

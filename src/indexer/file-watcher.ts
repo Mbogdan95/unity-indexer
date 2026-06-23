@@ -80,14 +80,9 @@ export class FileWatcher {
   private flush(): void {
     const changes = new Map(this.pendingChanges);
     this.pendingChanges.clear();
-
-    for (const [relativePath, event] of changes) {
-      if (event === "unlink") {
-        this.indexer.removeFile(relativePath);
-      } else {
-        this.indexer.indexFile(relativePath);
-      }
-    }
+    // Process the whole batch at once so expensive ops (recomputeReferenceCounts,
+    // updateProjectSummary) run only once instead of once per changed file.
+    this.indexer.flushChanges(changes);
   }
 
   private handleBulkChange(): void {

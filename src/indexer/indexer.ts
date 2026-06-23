@@ -275,8 +275,12 @@ export class Indexer {
         this.indexScriptCrossEdges(relativePath);
       });
     }
+    // Incremental graph patch — only touch edges for this file, not the full graph
+    const file = this.store.getFileByPath(relativePath);
+    if (file) {
+      this.store.patchGraphForFile(file.id, this.store.getGraphEdgesForFile(file.id));
+    }
     this.store.recomputeReferenceCounts();
-    this.store.hydrateGraph();
     this.updateProjectSummary();
   }
 
@@ -284,18 +288,64 @@ export class Indexer {
     const existing = this.store.getFileByPath(relativePath);
     if (!existing) return;
 
+    const fileId = existing.id;
     this.store.transaction(() => {
       this.store.insertChangeLog({
-        file_id: existing.id,
+        file_id: fileId,
         changed_at: new Date().toISOString(),
         change_type: "deleted",
       });
-      this.store.deleteFileData(existing.id);
-      this.store.deleteFile(existing.id);
+      this.store.deleteFileData(fileId);
+      this.store.deleteFile(fileId);
     });
 
+    // Incremental graph patch — remove stale in-memory edges for this file
+    this.store.patchGraphForFile(fileId, []);
     this.store.recomputeReferenceCounts();
-    this.store.hydrateGraph();
+    this.updateProjectSummary();
+  }
+
+  /**
+   * Process a batch of file-change events from the FileWatcher in one pass,
+   * deferring the expensive recomputeReferenceCounts / updateProjectSummary
+   * to run once at the end rather than once per file.
+   */
+  flushChanges(changes: ReadonlyMap<string, "add" | "change" | "unlink">): void {
+    if (changes.size === 0) return;
+
+    for (const [relativePath, event] of changes) {
+      if (event === "unlink") {
+        const existing = this.store.getFileByPath(relativePath);
+        if (!existing) continue;
+        const fileId = existing.id;
+        this.store.transaction(() => {
+          this.store.insertChangeLog({
+            file_id: fileId,
+            changed_at: new Date().toISOString(),
+            change_type: "deleted",
+          });
+          this.store.deleteFileData(fileId);
+          this.store.deleteFile(fileId);
+        });
+        this.store.patchGraphForFile(fileId, []);
+      } else {
+        this.store.transaction(() => {
+          this.indexFileInternal(relativePath);
+        });
+        if (relativePath.endsWith(".cs")) {
+          this.store.transaction(() => {
+            this.indexScriptCrossEdges(relativePath);
+          });
+        }
+        const file = this.store.getFileByPath(relativePath);
+        if (file) {
+          this.store.patchGraphForFile(file.id, this.store.getGraphEdgesForFile(file.id));
+        }
+      }
+    }
+
+    // Heavy ops deferred to run once for the whole batch
+    this.store.recomputeReferenceCounts();
     this.updateProjectSummary();
   }
 
@@ -738,9 +788,10 @@ export class Indexer {
 
     this.insertEdge("file", fileId, "assembly", asmId, "BELONGS_TO", fileId);
 
+    // Build lookup map once outside the loop to avoid O(n²) listAssemblies() calls
+    const assembliesByName = new Map(this.store.listAssemblies().map((a) => [a.name, a]));
     for (const refName of parsed.references) {
-      const allAssemblies = this.store.listAssemblies();
-      const targetAsm = allAssemblies.find((a) => a.name === refName);
+      const targetAsm = assembliesByName.get(refName);
       if (targetAsm) {
         this.insertEdge("assembly", asmId, "assembly", targetAsm.id, "ASSEMBLY_DEPENDS", fileId);
       }

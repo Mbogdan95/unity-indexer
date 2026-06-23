@@ -751,6 +751,12 @@ export class Store {
     getAllGraphEdges() {
         return this.prepare("SELECT * FROM graph_edges").all();
     }
+    getGraphEdgesForFile(fileId) {
+        return this.prepare("SELECT * FROM graph_edges WHERE source_file_id = ?").all(fileId);
+    }
+    patchGraphForFile(fileId, newEdges) {
+        this.graph.patchForFile(fileId, [], newEdges);
+    }
     // ---------------------------------------------------------------------------
     // Transactions
     // ---------------------------------------------------------------------------

@@ -66,12 +66,19 @@ export declare class GraphManager {
      * DFS-based cycle detection. Returns an array of cycles, each cycle being
      * an array of node IDs that form the cycle.
      */
-    detectCycles(edgeTypes?: GraphEdgeType[], maxLength?: number): string[][];
+    detectCycles(edgeTypes?: GraphEdgeType[], maxLength?: number, maxCycles?: number): {
+        cycles: string[][];
+        truncated: boolean;
+    };
     /**
      * Returns the top N nodes by the given metric.
-     * Supported metrics: "degree" (out-degree), "betweenness", "connected_components".
+     * Supported metrics:
+     *   "degree" — out-degree.
+     *   "degree_centrality" — total degree (in+out), approximates hub importance.
+     *   "betweenness" — alias for "degree_centrality" (same implementation).
+     *   "connected_components" — score by component size.
      */
-    getTopNodes(metric: "degree" | "betweenness" | "connected_components", topN: number): TopNodeResult[];
+    getTopNodes(metric: "degree" | "degree_centrality" | "betweenness" | "connected_components", topN: number): TopNodeResult[];
     private addEdgeRow;
     private bfs;
 }

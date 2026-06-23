@@ -25,6 +25,12 @@ export declare class Indexer {
     private indexBatchAsync;
     indexFile(relativePath: string): void;
     removeFile(relativePath: string): void;
+    /**
+     * Process a batch of file-change events from the FileWatcher in one pass,
+     * deferring the expensive recomputeReferenceCounts / updateProjectSummary
+     * to run once at the end rather than once per file.
+     */
+    flushChanges(changes: ReadonlyMap<string, "add" | "change" | "unlink">): void;
     private insertEdge;
     private indexFileInternal;
     private indexMeta;

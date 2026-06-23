@@ -121,5 +121,9 @@ export declare class Store {
     getAllGraphEdges(): (GraphEdgeRow & {
         id: number;
     })[];
+    getGraphEdgesForFile(fileId: number): (GraphEdgeRow & {
+        id: number;
+    })[];
+    patchGraphForFile(fileId: number, newEdges: GraphEdgeRow[]): void;
     transaction<T>(fn: () => T): T;
 }

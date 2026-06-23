@@ -24,9 +24,10 @@ export declare function handleGetSubgraph(store: Store, params: {
 export declare function handleDetectCycles(store: Store, params: {
     edge_types?: string[];
     max_length?: number;
+    max_cycles?: number;
 }): object;
 export declare function handleGetGraphStats(store: Store, params: {
-    metric: "degree" | "betweenness" | "connected_components";
+    metric: "degree" | "degree_centrality" | "betweenness" | "connected_components";
     top_n?: number;
     edge_types?: string[];
 }): object;

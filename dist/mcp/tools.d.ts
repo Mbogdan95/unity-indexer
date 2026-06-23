@@ -62,4 +62,10 @@ export declare function handleRecentChanges(store: Store, params: {
 export declare function handleBatchGetScriptDetail(store: Store, params: {
     class_names: string[];
 }): object;
+export declare function handleFindUnused(store: Store, params: {
+    class_name?: string;
+    file_path?: string;
+    namespace?: string;
+    assembly?: string;
+}): object;
 export declare function registerTools(server: McpServer, resolveStore: StoreResolver): void;

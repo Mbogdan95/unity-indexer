@@ -159,15 +159,17 @@ export function handleDetectCycles(store, params) {
         "ASSEMBLY_DEPENDS",
     ]);
     const maxLength = params.max_length ?? 10;
-    const cycles = store.graph.detectCycles(edgeTypes, maxLength);
+    const maxCycles = params.max_cycles ?? 200;
+    const { cycles, truncated } = store.graph.detectCycles(edgeTypes, maxLength, maxCycles);
     const response = {
         cycles: cycles.map((cycle) => ({
             nodes: cycle,
             length: cycle.length,
         })),
         total: cycles.length,
+        truncated,
         summary: cycles.length > 0
-            ? `Found ${String(cycles.length)} circular dependencies`
+            ? `Found ${String(cycles.length)} circular dependencies${truncated ? " (result capped — increase max_cycles to see more)" : ""}`
             : "No circular dependencies detected",
     };
     return { token_hint: estimateTokens(response), ...response };
@@ -283,13 +285,18 @@ export function registerGraphTools(server, resolveStore) {
         },
     }, (params) => toContent(handleGetSubgraph(resolveStore(params.project), params)));
     server.registerTool("detect_cycles", {
-        description: "Detect circular dependencies in the graph.",
+        description: "Detect circular dependencies in the graph. Returns cycles up to max_cycles (default 200); response includes truncated:true when the cap is hit — increase max_cycles to see more.",
         inputSchema: {
             edge_types: z
                 .array(z.string())
                 .optional()
                 .describe("Edge types to check (default: INHERITS, CALLS, ASSEMBLY_DEPENDS)"),
             max_length: z.number().int().optional().describe("Max cycle length to report (default 10)"),
+            max_cycles: z
+                .number()
+                .int()
+                .optional()
+                .describe("Max number of cycles to return (default 200); response includes truncated:true if capped"),
             project: z
                 .string()
                 .optional()
@@ -297,11 +304,11 @@ export function registerGraphTools(server, resolveStore) {
         },
     }, (params) => toContent(handleDetectCycles(resolveStore(params.project), params)));
     server.registerTool("get_graph_stats", {
-        description: "Get graph metrics: most-connected nodes, centrality, or connected components.",
+        description: "Get graph metrics: most-connected nodes, centrality, or connected components. Use 'degree' for out-degree hubs, 'degree_centrality' for total-degree hubs (most referenced + referencing), 'connected_components' for nodes in the largest dependency clusters. 'betweenness' is a backward-compatible alias for 'degree_centrality'.",
         inputSchema: {
             metric: z
-                .enum(["degree", "betweenness", "connected_components"])
-                .describe("Which metric to compute"),
+                .enum(["degree", "degree_centrality", "betweenness", "connected_components"])
+                .describe("Metric: 'degree' = out-degree, 'degree_centrality' = total degree (in+out), 'betweenness' = alias for degree_centrality, 'connected_components' = component size"),
             top_n: z.number().int().optional().describe("Number of top results (default 10)"),
             edge_types: z.array(z.string()).optional().describe("Filter by edge types"),
             project: z

@@ -7,7 +7,7 @@
 [![npm version](https://img.shields.io/npm/v/unity-indexer)](https://www.npmjs.com/package/unity-indexer)
 [![license](https://img.shields.io/npm/l/unity-indexer)](LICENSE)
 [![node](https://img.shields.io/node/v/unity-indexer)](package.json)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6)](tsconfig.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178c6)](tsconfig.json)
 
 [Quick Start](#-quick-start) • [Installation](#-installation) • [How it works](#️-how-it-works) • [Tools](#-available-tools) • [Development](#️-development)
 
@@ -15,7 +15,7 @@
 
 ---
 
-unity-indexer indexes a Unity project — scenes, prefabs, C# scripts, and assets — into a SQLite database and exposes 22 MCP tools so Claude can explore the project via structured queries. Instead of reading raw `.unity`, `.prefab`, and `.asset` files (Unity's non-standard YAML with GUIDs), Claude calls purpose-built tools that return exactly what's needed.
+unity-indexer indexes a Unity project — scenes, prefabs, C# scripts, and assets — into a SQLite database and exposes 23 MCP tools so Claude can explore the project via structured queries. Instead of reading raw `.unity`, `.prefab`, and `.asset` files (Unity's non-standard YAML with GUIDs), Claude calls purpose-built tools that return exactly what's needed.
 
 Works as a Claude Code plugin (MCP server auto-registered on install) or as a standalone npm package.
 
@@ -113,7 +113,7 @@ The index database is stored in `.unity-indexer/` at each project root and auto-
   ┌───────────────────────────────────────────┐
   │         Claude Code  (MCP client)         │
   └─────────────────────┬─────────────────────┘
-                        │ 22 MCP tool calls
+                        │ 23 MCP tool calls
   ┌─────────────────────▼─────────────────────┐
   │               MCP Server                  │
   └─────────────────────┬─────────────────────┘
@@ -296,16 +296,17 @@ Pre-computed one-line summaries (`component_summary`, `api_summary`, `subtree_su
 </details>
 
 <details>
-<summary><strong>🔍 Search &amp; Assets</strong> — 4 tools</summary>
+<summary><strong>🔍 Search &amp; Assets</strong> — 5 tools</summary>
 
 <br>
 
-| Tool              | Description                                                   |
-| ----------------- | ------------------------------------------------------------- |
-| `search`          | Search files, GameObjects, or scripts by name.                |
-| `find_components` | All GameObjects that have a specific component type attached. |
-| `list_assets`     | Unity `.asset` files, optionally filtered by type name.       |
-| `recent_changes`  | Files changed recently. Pass an ISO 8601 timestamp to filter. |
+| Tool              | Description                                                                                                                                                                         |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search`          | Search files, GameObjects, or scripts by name.                                                                                                                                      |
+| `find_components` | All GameObjects that have a specific component type attached.                                                                                                                       |
+| `list_assets`     | Unity `.asset` files, optionally filtered by type name.                                                                                                                             |
+| `recent_changes`  | Files changed recently. Pass an ISO 8601 timestamp to filter.                                                                                                                       |
+| `find_unused`     | Find scripts, assets, or scenes with no incoming references — a starting point for cleanup. Supports `asset_type` filter (`script`, `scene`, `prefab`, `asset`) and `min_days_old`. |
 
 </details>
 

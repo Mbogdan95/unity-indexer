@@ -16,7 +16,7 @@ For auto-discovery (watches for Unity projects):
 npx unity-indexer
 ```
 
-## Available Tools (22)
+## Available Tools (23)
 
 ### Scene & Prefab
 
@@ -58,12 +58,13 @@ npx unity-indexer
 
 ### Search & Assets
 
-| Tool              | Purpose                                                       |
-| ----------------- | ------------------------------------------------------------- |
-| `search`          | Search files, GameObjects, or scripts by name.                |
-| `find_components` | All GameObjects that have a specific component type attached. |
-| `list_assets`     | Unity `.asset` files, optionally filtered by type name.       |
-| `recent_changes`  | Files changed recently (pass ISO timestamp to filter).        |
+| Tool              | Purpose                                                                 |
+| ----------------- | ----------------------------------------------------------------------- |
+| `search`          | Search files, GameObjects, or scripts by name.                          |
+| `find_components` | All GameObjects that have a specific component type attached.           |
+| `list_assets`     | Unity `.asset` files, optionally filtered by type name.                 |
+| `recent_changes`  | Files changed recently (pass ISO timestamp to filter).                  |
+| `find_unused`     | Find scripts, assets, or scenes not referenced anywhere in the project. |
 
 ## Multiple projects
 

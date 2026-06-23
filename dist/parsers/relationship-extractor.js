@@ -166,13 +166,13 @@ function extractRootIdentifier(node) {
 /**
  * Walk all descendants of a node, calling visitor for each.
  */
-function walkAll(node, visitor) {
+export function walkAll(node, visitor) {
     visitor(node);
     for (const child of node.children) {
         walkAll(child, visitor);
     }
 }
-function collectClassBodies(root) {
+export function collectClassBodies(root) {
     const ranges = [];
     function walk(node) {
         if (node.type === "class_declaration" || node.type === "struct_declaration") {
@@ -193,7 +193,7 @@ function collectClassBodies(root) {
     walk(root);
     return ranges;
 }
-function findSourceClass(index, classBodies) {
+export function findSourceClass(index, classBodies) {
     // Find the most specific (innermost) class body that contains this index
     let best = null;
     for (const range of classBodies) {

@@ -176,16 +176,20 @@ export class GraphManager {
      * DFS-based cycle detection. Returns an array of cycles, each cycle being
      * an array of node IDs that form the cycle.
      */
-    detectCycles(edgeTypes, maxLength = 20) {
+    detectCycles(edgeTypes, maxLength = 20, maxCycles = 1000) {
         const cycles = [];
         const visited = new Set();
         const stack = [];
         const onStack = new Set();
         const dfs = (node) => {
+            if (cycles.length >= maxCycles)
+                return;
             visited.add(node);
             onStack.add(node);
             stack.push(node);
             this.g.forEachOutEdge(node, (_key, attrs, _src, neighbor) => {
+                if (cycles.length >= maxCycles)
+                    return;
                 if (edgeTypes && !edgeTypes.includes(attrs.type))
                     return;
                 if (stack.length > maxLength)
@@ -206,18 +210,22 @@ export class GraphManager {
             onStack.delete(node);
         };
         this.g.forEachNode((node) => {
-            if (!visited.has(node)) {
+            if (cycles.length < maxCycles && !visited.has(node)) {
                 dfs(node);
             }
         });
-        return cycles;
+        return { cycles, truncated: cycles.length >= maxCycles };
     }
     // -------------------------------------------------------------------------
     // Top nodes by metric
     // -------------------------------------------------------------------------
     /**
      * Returns the top N nodes by the given metric.
-     * Supported metrics: "degree" (out-degree), "betweenness", "connected_components".
+     * Supported metrics:
+     *   "degree" — out-degree.
+     *   "degree_centrality" — total degree (in+out), approximates hub importance.
+     *   "betweenness" — alias for "degree_centrality" (same implementation).
+     *   "connected_components" — score by component size.
      */
     getTopNodes(metric, topN) {
         const scores = new Map();
@@ -226,11 +234,9 @@ export class GraphManager {
                 scores.set(node, this.g.outDegree(node));
             });
         }
-        else if (metric === "betweenness") {
-            // Use a simple approximation: node appears in many paths
-            // For correctness we could use graphology-metrics betweenness, but
-            // it requires an undirected graph or additional setup. Use out-degree
-            // as a proxy for now.
+        else if (metric === "degree_centrality" || metric === "betweenness") {
+            // Total degree (in+out) approximates hub importance. "betweenness" is kept
+            // as a backward-compatible alias — it is NOT true betweenness centrality.
             this.g.forEachNode((node) => {
                 scores.set(node, this.g.outDegree(node) + this.g.inDegree(node));
             });

@@ -1,0 +1,377 @@
+import { getParser } from "./script-parser.js";
+import { walkAll, collectClassBodies } from "./relationship-extractor.js";
+// ============================================================
+// Constants
+// ============================================================
+const NAMESPACE_COMMON_TYPES = {
+    Generic: ["List", "Dictionary", "HashSet", "Queue", "Stack", "SortedDictionary", "LinkedList"],
+    Linq: ["Enumerable", "IQueryable", "IOrderedEnumerable"],
+    Collections: ["IEnumerable", "IList", "ArrayList", "Hashtable"],
+    UI: [
+        "Image",
+        "Text",
+        "Button",
+        "Toggle",
+        "Slider",
+        "InputField",
+        "Dropdown",
+        "ScrollRect",
+        "CanvasScaler",
+    ],
+    Events: ["UnityEvent", "UnityAction"],
+    Serialization: ["JsonUtility", "SerializeField"],
+    SceneManagement: ["SceneManager", "Scene", "LoadSceneMode"],
+    AI: ["NavMeshAgent", "NavMeshPath", "NavMesh"],
+    Physics2D: ["RaycastHit2D", "Collider2D", "Rigidbody2D", "ContactPoint2D"],
+    Rendering: ["CommandBuffer", "RenderPipeline", "Camera"],
+    Audio: ["AudioMixer", "AudioMixerGroup"],
+    Assertions: ["Assert"],
+    Diagnostics: ["Stopwatch", "Debug", "Trace"],
+    IO: ["File", "Directory", "Path", "Stream", "FileStream", "StreamReader", "StreamWriter"],
+    Text: ["StringBuilder", "Regex", "Encoding"],
+    Threading: ["Thread", "Mutex", "Monitor", "Interlocked"],
+    Tasks: ["Task", "TaskCompletionSource", "CancellationToken", "CancellationTokenSource"],
+};
+const UNITY_LIFECYCLE_METHODS = new Set([
+    "Awake",
+    "Start",
+    "Update",
+    "FixedUpdate",
+    "LateUpdate",
+    "OnEnable",
+    "OnDisable",
+    "OnDestroy",
+    "OnTriggerEnter",
+    "OnTriggerExit",
+    "OnTriggerStay",
+    "OnTriggerEnter2D",
+    "OnTriggerExit2D",
+    "OnTriggerStay2D",
+    "OnCollisionEnter",
+    "OnCollisionExit",
+    "OnCollisionStay",
+    "OnCollisionEnter2D",
+    "OnCollisionExit2D",
+    "OnCollisionStay2D",
+    "OnApplicationPause",
+    "OnApplicationQuit",
+    "OnBecameVisible",
+    "OnBecameInvisible",
+    "Reset",
+    "OnValidate",
+    "OnDrawGizmos",
+    "OnDrawGizmosSelected",
+    "OnMouseDown",
+    "OnMouseUp",
+    "OnMouseEnter",
+    "OnMouseExit",
+    "OnMouseOver",
+    "OnGUI",
+    "OnAnimatorIK",
+    "OnAnimatorMove",
+    "OnParticleCollision",
+    "OnJointBreak",
+    "OnRenderImage",
+    "OnRenderObject",
+    "OnPreCull",
+    "OnPreRender",
+    "OnPostRender",
+]);
+const EXEMPT_METHOD_ATTRIBUTES = new Set([
+    "RuntimeInitializeOnLoadMethod",
+    "MenuItem",
+    "InitializeOnLoadMethod",
+    "Preserve",
+    "ContextMenu",
+    "ContextMenuItem",
+]);
+// ============================================================
+// Helper: find the actual AST body node matching a ClassBodyRange
+// ============================================================
+function findBodyNode(root, range) {
+    let found = null;
+    walkAll(root, (n) => {
+        if (found)
+            return;
+        if (n.startIndex === range.startIndex && n.endIndex === range.endIndex) {
+            found = n;
+        }
+    });
+    return found;
+}
+// ============================================================
+// Helper: access modifier from list of modifier strings
+// ============================================================
+function getAccessFromModifiers(modifiers) {
+    if (modifiers.includes("public"))
+        return "public";
+    if (modifiers.includes("protected") && modifiers.includes("internal"))
+        return "protected internal";
+    if (modifiers.includes("private") && modifiers.includes("protected"))
+        return "private protected";
+    if (modifiers.includes("protected"))
+        return "protected";
+    if (modifiers.includes("internal"))
+        return "internal";
+    return "private";
+}
+// ============================================================
+// analyzeUsings
+// ============================================================
+function analyzeUsings(root, classBodies) {
+    // Collect all identifiers across all class bodies
+    const fileIdentifiers = new Set();
+    for (const range of classBodies) {
+        const bodyNode = findBodyNode(root, range);
+        if (!bodyNode)
+            continue;
+        walkAll(bodyNode, (n) => {
+            if (n.type === "identifier") {
+                fileIdentifiers.add(n.text);
+            }
+        });
+    }
+    const unused = [];
+    for (const child of root.children) {
+        if (child.type !== "using_directive")
+            continue;
+        const text = child.text;
+        // Skip aliased usings (too complex)
+        if (text.includes("="))
+            continue;
+        // Extract namespace: strip "using " prefix and ";" suffix
+        let namespaceName = text
+            .replace(/^using\s+/, "")
+            .replace(/;$/, "")
+            .trim();
+        if (namespaceName.startsWith("static ")) {
+            namespaceName = namespaceName.slice(7).trim();
+        }
+        // Last segment after last "."
+        const dotIndex = namespaceName.lastIndexOf(".");
+        const lastSegment = dotIndex >= 0 ? namespaceName.slice(dotIndex + 1) : namespaceName;
+        const line = child.startPosition.row + 1;
+        const extraTypes = NAMESPACE_COMMON_TYPES[lastSegment] ?? [];
+        const isUsed = fileIdentifiers.has(lastSegment) || extraTypes.some((t) => fileIdentifiers.has(t));
+        if (!isUsed) {
+            unused.push({ name: namespaceName, line });
+        }
+    }
+    return unused;
+}
+// ============================================================
+// countIdentifiersInRange
+// ============================================================
+function countIdentifiersInRange(classBodyRange, root) {
+    const counts = new Map();
+    const bodyNode = findBodyNode(root, classBodyRange);
+    if (!bodyNode)
+        return counts;
+    walkAll(bodyNode, (n) => {
+        if (n.type === "identifier") {
+            counts.set(n.text, (counts.get(n.text) ?? 0) + 1);
+        }
+    });
+    return counts;
+}
+// ============================================================
+// analyzeFields
+// ============================================================
+function analyzeFields(members, identifierCounts) {
+    const unused = [];
+    for (const member of members) {
+        if (member.kind !== "field")
+            continue;
+        if (member.access === "public")
+            continue;
+        if (member.has_serialize_field)
+            continue;
+        if (member.has_header_attr)
+            continue;
+        // Check attributes JSON for SerializeField or Header
+        try {
+            const parsed = JSON.parse(member.attributes);
+            if (Array.isArray(parsed)) {
+                const attrs = parsed.filter((x) => typeof x === "string");
+                if (attrs.includes("SerializeField") || attrs.includes("Header"))
+                    continue;
+            }
+        }
+        catch {
+            // malformed JSON — proceed with analysis
+        }
+        const count = identifierCounts.get(member.name) ?? 0;
+        // UNUSED if count <= 1 (declaration itself counts as one occurrence)
+        if (count <= 1) {
+            unused.push({
+                name: member.name,
+                type: member.return_type,
+                line: member.start_line,
+            });
+        }
+    }
+    return unused;
+}
+// ============================================================
+// analyzeLocals
+// ============================================================
+function analyzeLocals(classBodyRange, root) {
+    const unused = [];
+    const bodyNode = findBodyNode(root, classBodyRange);
+    if (!bodyNode)
+        return unused;
+    // Walk class body for method_declaration nodes
+    walkAll(bodyNode, (method) => {
+        if (method.type !== "method_declaration")
+            return;
+        const methodNameNode = method.childForFieldName("name");
+        const methodName = methodNameNode?.text ?? "";
+        const methodBody = method.childForFieldName("body");
+        if (!methodBody)
+            return;
+        // Count identifiers within this method body
+        const localIdentifierCounts = new Map();
+        walkAll(methodBody, (n) => {
+            if (n.type === "identifier") {
+                localIdentifierCounts.set(n.text, (localIdentifierCounts.get(n.text) ?? 0) + 1);
+            }
+        });
+        // Walk method body for local_declaration_statement nodes
+        walkAll(methodBody, (node) => {
+            if (node.type !== "local_declaration_statement")
+                return;
+            const varDecl = node.namedChildren.find((c) => c.type === "variable_declaration");
+            if (!varDecl)
+                return;
+            const typeNode = varDecl.childForFieldName("type");
+            const typeText = typeNode?.text ?? "";
+            const declarators = varDecl.namedChildren.filter((c) => c.type === "variable_declarator");
+            for (const declarator of declarators) {
+                const nameNode = declarator.childForFieldName("name");
+                const name = nameNode?.text ?? "";
+                if (name === "" || name.startsWith("_"))
+                    continue;
+                const count = localIdentifierCounts.get(name) ?? 0;
+                // UNUSED if count <= 1 (declaration itself)
+                if (count <= 1) {
+                    unused.push({
+                        name,
+                        type: typeText,
+                        line: node.startPosition.row + 1,
+                        method_name: methodName,
+                    });
+                }
+            }
+        });
+    });
+    return unused;
+}
+// ============================================================
+// analyzeMethods
+// ============================================================
+function analyzeMethods(classBodyRange, root, identifierCounts, classInput) {
+    const unused = [];
+    const bodyNode = findBodyNode(root, classBodyRange);
+    if (!bodyNode)
+        return unused;
+    walkAll(bodyNode, (method) => {
+        if (method.type !== "method_declaration")
+            return;
+        const nameNode = method.childForFieldName("name");
+        const name = nameNode?.text ?? "";
+        if (name === "")
+            return;
+        // Collect modifiers
+        const modifiers = method.children
+            .filter((c) => c.type === "modifier")
+            .flatMap((m) => m.children.map((mc) => mc.text));
+        const access = getAccessFromModifiers(modifiers);
+        // Skip public methods
+        if (access === "public")
+            return;
+        // Skip override and abstract methods
+        if (modifiers.includes("override") || modifiers.includes("abstract"))
+            return;
+        // Skip Unity lifecycle methods
+        if (UNITY_LIFECYCLE_METHODS.has(name))
+            return;
+        // Parse attributes and check for exempt attributes
+        const methodAttrs = [];
+        for (const child of method.children) {
+            if (child.type === "attribute_list") {
+                for (const attrNode of child.namedChildren) {
+                    if (attrNode.type === "attribute") {
+                        const attrName = attrNode.childForFieldName("name")?.text;
+                        if (attrName != null && attrName !== "")
+                            methodAttrs.push(attrName);
+                    }
+                }
+            }
+        }
+        if (methodAttrs.some((a) => EXEMPT_METHOD_ATTRIBUTES.has(a)))
+            return;
+        const count = identifierCounts.get(name) ?? 0;
+        // Candidate if count <= 1
+        if (count <= 1) {
+            const signature = method.text
+                .split("\n")[0]
+                .trim()
+                .replace(/\s*\{?\s*$/, "");
+            const line = method.startPosition.row + 1;
+            const unusedMethod = { name, access, signature, line };
+            if (classInput.externalCallerClassNames.length > 0) {
+                unusedMethod.may_be_called_externally = true;
+            }
+            unused.push(unusedMethod);
+        }
+    });
+    return unused;
+}
+// ============================================================
+// Main exported function
+// ============================================================
+export function analyzeFile(input) {
+    const parser = getParser();
+    if (!parser) {
+        throw new Error("Script parser not initialized");
+    }
+    const tree = parser.parse(input.content);
+    if (!tree) {
+        return {
+            file_path: input.filePath,
+            unused_usings: [],
+            classes: [],
+        };
+    }
+    const root = tree.rootNode;
+    const classBodies = collectClassBodies(root);
+    const unusedUsings = analyzeUsings(root, classBodies);
+    const results = [];
+    for (const classInput of input.classes) {
+        if (classInput.isGenerated)
+            continue;
+        // Find matching ClassBodyRange by className
+        const classBodyRange = classBodies.find((r) => r.className === classInput.className);
+        if (!classBodyRange)
+            continue;
+        const identifierCounts = countIdentifiersInRange(classBodyRange, root);
+        const unusedFields = analyzeFields(classInput.members, identifierCounts);
+        const unusedLocals = analyzeLocals(classBodyRange, root);
+        const unusedMethods = analyzeMethods(classBodyRange, root, identifierCounts, classInput);
+        if (unusedFields.length > 0 || unusedLocals.length > 0 || unusedMethods.length > 0) {
+            results.push({
+                class_name: classInput.className,
+                unused_fields: unusedFields,
+                unused_locals: unusedLocals,
+                unused_methods: unusedMethods,
+            });
+        }
+    }
+    tree.delete();
+    return {
+        file_path: input.filePath,
+        unused_usings: unusedUsings,
+        classes: results,
+    };
+}
+//# sourceMappingURL=unused-analyzer.js.map

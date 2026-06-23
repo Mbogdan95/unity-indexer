@@ -1,5 +1,8 @@
+import { readFileSync } from "fs";
+import { join } from "path";
 import { z } from "zod";
 import { encodeNodeId, decodeNodeId } from "../types.js";
+import { analyzeFile, } from "../parsers/unused-analyzer.js";
 function estimateTokens(obj) {
     return Math.ceil(JSON.stringify(obj).length / 4);
 }
@@ -516,6 +519,100 @@ export function handleBatchGetScriptDetail(store, params) {
     }));
     return { token_hint: estimateTokens(results), results };
 }
+export function handleFindUnused(store, params) {
+    // 1. Resolve scripts
+    let scripts;
+    if (params.class_name !== undefined) {
+        const s = store.getScriptByClassName(params.class_name);
+        if (!s)
+            return { token_hint: 10, error: `Script not found: ${params.class_name}` };
+        scripts = [s];
+    }
+    else if (params.file_path !== undefined) {
+        const file = store.getFileByPath(store.stripPrefix(params.file_path));
+        if (!file)
+            return { token_hint: 10, error: `File not found: ${params.file_path}` };
+        scripts = store.listScripts({}).filter((s) => s.file_id === file.id);
+        if (scripts.length === 0)
+            return { token_hint: 10, error: `No scripts indexed for: ${params.file_path}` };
+    }
+    else {
+        scripts = store.listScripts({
+            namespace: params.namespace,
+            assembly: params.assembly,
+        });
+    }
+    // 2. Group scripts by file_id
+    const byFile = new Map();
+    for (const s of scripts) {
+        const arr = byFile.get(s.file_id) ?? [];
+        arr.push(s);
+        byFile.set(s.file_id, arr);
+    }
+    // 3. Get project root
+    const projectRoot = store.getProjectRootPath();
+    // 4. Analyze each file
+    const results = [];
+    for (const [fileId, fileScripts] of byFile) {
+        const file = store.getFileById(fileId);
+        if (!file)
+            continue;
+        const absolutePath = join(projectRoot, file.path);
+        let content;
+        try {
+            content = readFileSync(absolutePath, "utf-8");
+        }
+        catch (err) {
+            results.push({
+                file_path: store.prefixPath(file.path),
+                unused_usings: [],
+                classes: [],
+                error: `Cannot read file: ${String(err)}`,
+            });
+            continue;
+        }
+        // Build ClassInput for each script in this file
+        const classes = fileScripts.map((script) => {
+            const members = store.getScriptMembers(script.id);
+            const incoming = store.graph.getIncoming(encodeNodeId("script", script.id), ["CALLS"]);
+            const externalCallerClassNames = incoming
+                .map((e) => {
+                const { id } = decodeNodeId(e.nodeId);
+                return store.getScriptById(id)?.class_name ?? "";
+            })
+                .filter(Boolean);
+            return {
+                scriptId: script.id,
+                className: script.class_name,
+                isGenerated: script.is_generated,
+                members,
+                externalCallerClassNames,
+            };
+        });
+        const input = {
+            content,
+            filePath: store.prefixPath(file.path),
+            classes,
+        };
+        const result = analyzeFile(input);
+        // Only include files with at least one finding
+        const hasFindings = result.unused_usings.length > 0 ||
+            result.classes.some((c) => c.unused_fields.length > 0 || c.unused_locals.length > 0 || c.unused_methods.length > 0);
+        if (hasFindings || result.error !== undefined) {
+            results.push(result);
+        }
+    }
+    // 5. Build summary
+    const summary = {
+        files_analyzed: byFile.size,
+        files_with_issues: results.filter((r) => r.error === undefined).length,
+        total_unused_usings: results.reduce((n, r) => n + r.unused_usings.length, 0),
+        total_unused_fields: results.reduce((n, r) => n + r.classes.reduce((m, c) => m + c.unused_fields.length, 0), 0),
+        total_unused_locals: results.reduce((n, r) => n + r.classes.reduce((m, c) => m + c.unused_locals.length, 0), 0),
+        total_unused_methods: results.reduce((n, r) => n + r.classes.reduce((m, c) => m + c.unused_methods.length, 0), 0),
+    };
+    return { token_hint: Math.max(50, results.length * 20), files: results, summary };
+}
 // ---------------------------------------------------------------------------
 // MCP Tool Registration
 // ---------------------------------------------------------------------------
@@ -716,5 +813,24 @@ export function registerTools(server, resolveStore) {
                 .describe("Project name (required if multiple projects indexed)"),
         },
     }, (params) => toContent(handleRecentChanges(resolveStore(params.project), params)));
+    server.registerTool("find_unused", {
+        description: "Find unused using directives, private fields, local variables, and non-public methods " +
+            "in C# Unity scripts. Returns only files/classes with at least one finding. " +
+            "Exempt: Unity lifecycle methods (Awake, Start, Update, etc.), [SerializeField] fields, " +
+            "public methods, override/abstract methods. " +
+            "Omit all params for a full-project sweep. " +
+            "Note: using-directive detection is heuristic. " +
+            "External callers are detected at script granularity (not method granularity).",
+        inputSchema: {
+            class_name: z.string().optional().describe("Analyze the file containing this C# class"),
+            file_path: z.string().optional().describe("Analyze a specific .cs file by path"),
+            namespace: z.string().optional().describe("Filter by namespace prefix (full sweep only)"),
+            assembly: z.string().optional().describe("Filter by assembly name (full sweep only)"),
+            project: z
+                .string()
+                .optional()
+                .describe("Project name (required if multiple projects are indexed)"),
+        },
+    }, (params) => toContent(handleFindUnused(resolveStore(params.project), params)));
 }
 //# sourceMappingURL=tools.js.map

@@ -322,9 +322,10 @@ describe("GraphManager", () => {
 
     graph.hydrate(store.getAllGraphEdges());
 
-    const cycles = graph.detectCycles();
+    const { cycles, truncated } = graph.detectCycles();
     expect(cycles.length).toBeGreaterThan(0);
     expect(cycles[0].length).toBe(3);
+    expect(truncated).toBe(false);
   });
 
   it("computes degree stats", () => {
