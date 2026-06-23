@@ -10,3 +10,15 @@ coverage/
 .DS_Store
 
 docs/superpowers/
+
+# local index cache (contains indexed project data — not for public repo)
+.unity-indexer/
+
+# local-only Claude settings
+.claude/settings.local.json
+
+# editor dirs
+.idea/
+.vscode/
+
+*.log
