@@ -8,7 +8,7 @@
 [![node](https://img.shields.io/badge/node-%3E%3D20.17.0-brightgreen)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178c6)](tsconfig.json)
 
-[Quick Start](#-quick-start) • [Installation](#-installation) • [How it works](#️-how-it-works) • [Tools](#-available-tools) • [Development](#️-development)
+[Quick Start](#-quick-start) • [How it works](#️-how-it-works) • [Tools](#-available-tools) • [Development](#️-development)
 
 </div>
 
@@ -31,20 +31,6 @@ Distributed as a Claude Code plugin via GitHub with automatic MCP server registr
 
 > [!TIP]
 > MCP server auto-registers on install. Tools are available in the next session.
-
----
-
-## 📦 Installation
-
-### Claude Code Plugin
-
-```text
-/plugin marketplace add Mbogdan95/unity-indexer
-/plugin install unity-indexer@unity-indexer
-```
-
-> [!NOTE]
-> MCP server auto-registers on install — no manual configuration needed.
 
 ---
 
