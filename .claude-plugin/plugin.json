@@ -3,6 +3,5 @@
   "description": "Token-efficient Unity project code explorer. Provides tools for searching scripts, finding references, inspecting types, and navigating Unity-specific patterns.",
   "author": {
     "name": "Bogdan Manta"
-  },
-  "hooks": "./hooks/hooks.json"
+  }
 }
