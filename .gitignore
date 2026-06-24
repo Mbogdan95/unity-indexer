@@ -9,7 +9,7 @@ node_modules/
 coverage/
 .DS_Store
 
-docs/superpowers/
+docs/
 
 # local index cache (contains indexed project data — not for public repo)
 .unity-indexer/
