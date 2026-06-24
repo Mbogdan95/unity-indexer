@@ -557,7 +557,6 @@ export class Store {
       JOIN files f ON s.file_id = f.id
       JOIN files mf ON mf.path = f.path || '.meta'
       JOIN guids g ON g.file_id = mf.id
-      WHERE s.is_monobehaviour = 1
     `,
     ).all() as { class_name: string; guid: string }[];
 
