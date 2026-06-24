@@ -33,7 +33,7 @@ Distributed as a Claude Code plugin via GitHub with automatic MCP server registr
 
 ```text
 /plugin marketplace add Mbogdan95/unity-indexer
-/plugin install unity-indexer@unity-indexer
+/add-plugin unity-indexer
 ```
 
 > [!TIP]
