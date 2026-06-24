@@ -57,11 +57,19 @@ export class Indexer {
                 }
             });
             endPhase?.();
+            log("propagating MonoBehaviour inheritance...");
+            endPhase = this.benchmark?.startPhase("mb_propagate");
+            this.store.propagateMonoBehaviourInheritance();
+            endPhase?.();
         }
         if (asmdefs.length > 0) {
             log(`indexing ${String(asmdefs.length)} asmdef files...`);
             endPhase = this.benchmark?.startPhase("asmdefs");
             this.indexBatch(asmdefs);
+            endPhase?.();
+            log("assigning assembly names to scripts...");
+            endPhase = this.benchmark?.startPhase("assembly_assign");
+            this.store.assignScriptAssemblies();
             endPhase?.();
         }
         if (assets.length > 0) {
@@ -131,10 +139,14 @@ export class Indexer {
                     }
                 });
             }
+            log("propagating MonoBehaviour inheritance...");
+            this.store.propagateMonoBehaviourInheritance();
         }
         if (asmdefs.length > 0) {
             log(`indexing ${String(asmdefs.length)} asmdef files...`);
             await this.indexBatchAsync(asmdefs);
+            log("assigning assembly names to scripts...");
+            this.store.assignScriptAssemblies();
         }
         if (assets.length > 0) {
             log(`indexing ${String(assets.length)} asset files...`);

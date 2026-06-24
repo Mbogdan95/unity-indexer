@@ -453,7 +453,6 @@ export class Store {
       JOIN files f ON s.file_id = f.id
       JOIN files mf ON mf.path = f.path || '.meta'
       JOIN guids g ON g.file_id = mf.id
-      WHERE s.is_monobehaviour = 1
     `).all();
         const map = new Map();
         for (const row of rows) {
@@ -526,6 +525,56 @@ export class Store {
         if (!row)
             return undefined;
         return { id: row.id, name: row.name, path: row.path };
+    }
+    propagateMonoBehaviourInheritance() {
+        // Walk INHERITS edges to mark transitive descendants of MonoBehaviour scripts.
+        // Needed when intermediate base classes exist (e.g. Player : PlayerBase : MonoBehaviour).
+        this.prepare(`
+      UPDATE scripts SET is_monobehaviour = 1
+      WHERE id IN (
+        WITH RECURSIVE mb_descendants(id) AS (
+          SELECT id FROM scripts WHERE is_monobehaviour = 1
+          UNION ALL
+          SELECT e.source_id
+          FROM graph_edges e
+          JOIN mb_descendants mb ON e.target_id = mb.id
+          WHERE e.edge_type = 'INHERITS'
+            AND e.source_type = 'script'
+            AND e.target_type = 'script'
+        )
+        SELECT id FROM mb_descendants
+      )
+      AND is_monobehaviour = 0
+    `).run();
+    }
+    assignScriptAssemblies() {
+        // Join assemblies with their file paths, sorted most-specific (deepest) first.
+        // For each asmdef, update scripts whose path is under that asmdef's directory.
+        // Most-specific match wins because we only update scripts still at assembly_name = ''.
+        const asmRows = this.prepare(`
+      SELECT a.name, f.path as file_path
+      FROM assemblies a
+      JOIN files f ON a.file_id = f.id
+      ORDER BY length(f.path) DESC
+    `).all();
+        const stmt = this.prepare(`
+      UPDATE scripts SET assembly_name = ?
+      WHERE (assembly_name = '' OR assembly_name IS NULL)
+      AND file_id IN (
+        SELECT id FROM files WHERE path LIKE ? AND type = 'script'
+      )
+    `);
+        for (const { name, file_path } of asmRows) {
+            const lastSlash = file_path.lastIndexOf("/");
+            const dir = lastSlash >= 0 ? file_path.slice(0, lastSlash) : "";
+            if (dir)
+                stmt.run(name, dir + "/%");
+        }
+        // Scripts still unassigned belong to the default Unity assembly
+        this.prepare(`
+      UPDATE scripts SET assembly_name = 'Assembly-CSharp'
+      WHERE assembly_name = '' OR assembly_name IS NULL
+    `).run();
     }
     insertAssembly(asm) {
         const stmt = this.prepare(`

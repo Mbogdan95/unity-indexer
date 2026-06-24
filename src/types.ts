@@ -139,6 +139,7 @@ export const UNITY_CLASS_IDS: Record<number, string> = {
   86: "AnimatorController",
   89: "CubemapArray",
   90: "Avatar",
+  92: "FlareLayer",
   91: "AnimatorOverrideController",
   95: "Animator",
   102: "TextMesh",
@@ -222,6 +223,7 @@ export const UNITY_CLASS_IDS: Record<number, string> = {
   300: "ScriptedImporter",
   310: "UnityConnectSettings",
   319: "AvatarMask",
+  320: "PlayableDirector",
   328: "VideoClip",
   329: "Terrain",
   330: "TerrainLayer",
@@ -232,6 +234,8 @@ export const UNITY_CLASS_IDS: Record<number, string> = {
   687: "SpriteShape",
   1001: "PrefabInstance",
   1101: "PrefabInstance",
+  1660057539: "SceneRoots",
+  1818360608: "PositionConstraint",
 };
 
 // === File Type Detection ===
