@@ -4,7 +4,6 @@
 
 **Token-efficient Unity project explorer for Claude Code**
 
-[![npm version](https://img.shields.io/npm/v/unity-indexer)](https://www.npmjs.com/package/unity-indexer)
 [![license](https://img.shields.io/npm/l/unity-indexer)](LICENSE)
 [![node](https://img.shields.io/node/v/unity-indexer)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178c6)](tsconfig.json)
@@ -17,7 +16,7 @@
 
 unity-indexer indexes a Unity project — scenes, prefabs, C# scripts, and assets — into a SQLite database and exposes 23 MCP tools so Claude can explore the project via structured queries. Instead of reading raw `.unity`, `.prefab`, and `.asset` files (Unity's non-standard YAML with GUIDs), Claude calls purpose-built tools that return exactly what's needed.
 
-Works as a Claude Code plugin (MCP server auto-registered on install) or as a standalone npm package.
+Distributed as a Claude Code plugin via GitHub with automatic MCP server registration on install.
 
 ---
 
@@ -33,13 +32,6 @@ Works as a Claude Code plugin (MCP server auto-registered on install) or as a st
 > [!TIP]
 > MCP server auto-registers on install. Tools are available in the next session.
 
-**npm — manual setup:**
-
-```bash
-npx unity-indexer install            # register in Claude Code settings
-npx unity-indexer <path-to-project>  # start the server
-```
-
 ---
 
 ## 📦 Installation
@@ -53,32 +45,6 @@ npx unity-indexer <path-to-project>  # start the server
 
 > [!NOTE]
 > MCP server auto-registers on install — no manual configuration needed.
-
-### npm / Manual
-
-```bash
-# Option A: without global install
-npx unity-indexer install          # registers in ~/.claude/settings.json
-npx unity-indexer <project-path>   # start the server
-
-# Option B: global install
-npm install -g unity-indexer
-unity-indexer install
-unity-indexer <project-path>
-```
-
-`install` writes to Claude Code settings. Use `--scope` to select the settings file:
-
-| Scope              | File                            |
-| ------------------ | ------------------------------- |
-| `global` (default) | `~/.claude/settings.json`       |
-| `local`            | `~/.claude/settings.local.json` |
-| `project`          | `.claude/settings.json`         |
-| `project-local`    | `.claude/settings.local.json`   |
-
-```bash
-unity-indexer install --scope project
-```
 
 ---
 
