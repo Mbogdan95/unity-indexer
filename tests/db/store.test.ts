@@ -353,7 +353,7 @@ describe("getGuidToClassMap", () => {
     expect(map.get("abc123guid")).toBe("Foo");
   });
 
-  it("excludes non-MonoBehaviour scripts", () => {
+  it("includes non-MonoBehaviour scripts (needed for indirect inheritance summaries)", () => {
     const scriptFileId = store.upsertFile(
       makeFile({ path: "Assets/Scripts/Bar.cs", type: "script" }),
     );
@@ -377,7 +377,7 @@ describe("getGuidToClassMap", () => {
     });
 
     const map = store.getGuidToClassMap();
-    expect(map.has("bar123guid")).toBe(false);
+    expect(map.get("bar123guid")).toBe("Bar");
   });
 });
 

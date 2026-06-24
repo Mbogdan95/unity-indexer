@@ -355,7 +355,7 @@ describe("handleResolveGuid", () => {
 });
 
 describe("handleFindComponents", () => {
-  it("finds components by type", () => {
+  it("finds components by built-in type name", () => {
     const result = handleFindComponents(store, { type: "Transform" }) as Record<string, unknown>;
 
     expect(result.components).toBeDefined();
@@ -372,6 +372,25 @@ describe("handleFindComponents", () => {
     expect(result.components).toBeDefined();
     const components = result.components as unknown[];
     expect(components.length).toBeGreaterThan(0);
+  });
+
+  it("finds custom MonoBehaviour by class name via GUID fallback", () => {
+    const result = handleFindComponents(store, {
+      type: "PlayerController",
+    }) as Record<string, unknown>;
+
+    expect(result.total).toBe(1);
+    const components = result.components as Array<Record<string, unknown>>;
+    expect(components[0].game_object_name).toBe("Player");
+    expect(components[0].script_guid).toBe("a1b2c3d4e5f6a1b2c3d4e5f6");
+  });
+
+  it("returns 0 for unknown type name", () => {
+    const result = handleFindComponents(store, { type: "NonExistentType" }) as Record<
+      string,
+      unknown
+    >;
+    expect(result.total).toBe(0);
   });
 });
 
