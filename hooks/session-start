@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  ROOT="$CLAUDE_PLUGIN_ROOT"
+  HARNESS="claude"
+elif [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
+  ROOT="$CURSOR_PLUGIN_ROOT"
+  HARNESS="cursor"
+else
+  exit 0
+fi
+
+SKILL_FILE="$ROOT/skills/unity-indexer/SKILL.md"
+
+if [ ! -f "$SKILL_FILE" ]; then
+  exit 0
+fi
+
+if command -v python3 &>/dev/null; then
+  ENCODED=$(python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' < "$SKILL_FILE")
+else
+  ENCODED=$(node -e 'let d=""; process.stdin.on("data",c=>d+=c); process.stdin.on("end",()=>process.stdout.write(JSON.stringify(d)));' < "$SKILL_FILE")
+fi
+
+if [ "$HARNESS" = "cursor" ]; then
+  printf '{"additional_context": %s}' "$ENCODED"
+else
+  printf '{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": %s}}' "$ENCODED"
+fi
