@@ -22,18 +22,9 @@ Distributed as a Claude Code plugin via GitHub with automatic MCP server registr
 
 ## ⚡ Quick Start
 
-**Claude Code:**
-
 ```text
 /plugin marketplace add Mbogdan95/unity-indexer
 /plugin install unity-indexer@unity-indexer
-```
-
-**Cursor:**
-
-```text
-/plugin marketplace add Mbogdan95/unity-indexer
-/add-plugin unity-indexer
 ```
 
 > [!TIP]
