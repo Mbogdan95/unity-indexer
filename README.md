@@ -4,8 +4,8 @@
 
 **Token-efficient Unity project explorer for Claude Code**
 
-[![license](https://img.shields.io/npm/l/unity-indexer)](LICENSE)
-[![node](https://img.shields.io/node/v/unity-indexer)](package.json)
+[![license](https://img.shields.io/github/license/Mbogdan95/unity-indexer)](LICENSE)
+[![node](https://img.shields.io/badge/node-%3E%3D20.17.0-brightgreen)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178c6)](tsconfig.json)
 
 [Quick Start](#-quick-start) • [Installation](#-installation) • [How it works](#️-how-it-works) • [Tools](#-available-tools) • [Development](#️-development)
@@ -45,27 +45,6 @@ Distributed as a Claude Code plugin via GitHub with automatic MCP server registr
 
 > [!NOTE]
 > MCP server auto-registers on install — no manual configuration needed.
-
----
-
-## 🚀 Starting the server
-
-**Direct path** — index a specific Unity project:
-
-```bash
-npx unity-indexer <path-to-unity-project>
-```
-
-**Auto-discovery** — scan the current directory for Unity projects:
-
-```bash
-npx unity-indexer
-```
-
-> [!NOTE]
-> With no arguments, unity-indexer scans 3 levels deep for directories containing `Assets/` and `ProjectSettings/`. All found projects are indexed and available via `project:`.
-
-The index database is stored in `.unity-indexer/` at each project root and auto-added to `.gitignore`.
 
 ---
 
