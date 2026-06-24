@@ -11,7 +11,13 @@ export function parseUnityYaml(content) {
         const classId = parseInt(headerMatch[1], 10);
         const fileId = headerMatch[2];
         const stripped = raw.header.includes("stripped");
-        const typeName = UNITY_CLASS_IDS[classId] ?? `UnknownType_${String(classId)}`;
+        // Prefer the map for well-known IDs (gives concrete names like "FlareLayer" instead
+        // of the YAML base-class key "Behaviour"). Fall back to the YAML root key, which is
+        // always the actual class name for package/custom built-ins (e.g. "PlayableDirector").
+        const yamlRootKey = raw.body.match(/^(\w+):/)?.[1];
+        const typeName = classId in UNITY_CLASS_IDS
+            ? UNITY_CLASS_IDS[classId]
+            : (yamlRootKey ?? `UnknownType_${String(classId)}`);
         let data;
         try {
             const doc = parseDocument(raw.body, { uniqueKeys: false });

@@ -88,6 +88,8 @@ export declare class Store {
         name: string;
         path: string;
     } | undefined;
+    propagateMonoBehaviourInheritance(): void;
+    assignScriptAssemblies(): void;
     insertAssembly(asm: AssemblyRow): number;
     insertChangeLog(entry: ChangeLogRow): void;
     getRecentChanges(limit?: number): (ChangeLogRow & {
