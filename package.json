@@ -40,7 +40,6 @@
     "format:check": "prettier --check .",
     "ci": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build",
     "prepare": "husky",
-    "prepublishOnly": "npm run typecheck && npm run lint && npm run test && npm run build",
     "benchmark": "tsx tests/benchmark/run-benchmark.ts"
   },
   "engines": {
