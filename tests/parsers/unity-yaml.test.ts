@@ -86,9 +86,7 @@ GameObject:
 `;
     const docs = parseUnityYaml(content);
     expect(docs).toHaveLength(1);
-    // Unsafe-integer anchors are canonicalized through Number so they compare
-    // equal to fileID values parsed out of YAML bodies (which lose precision).
-    expect(docs[0].fileId).toBe(String(Number("-8720842103846894243")));
+    expect(docs[0].fileId).toBe("-8720842103846894243");
     expect(docs[0].typeName).toBe("GameObject");
   });
 

@@ -257,9 +257,12 @@ export class Store {
   }
 
   getGameObjectByName(fileId: number, name: string): (GameObjectRow & { id: number }) | undefined {
-    const row = this.db
-      .prepare("SELECT * FROM game_objects WHERE file_id = ? AND name = ? LIMIT 1")
-      .get(fileId, name) as Record<string, unknown> | undefined;
+    // Case-insensitive, but an exact-case match wins when both exist
+    const row = this.prepare(
+      `SELECT * FROM game_objects
+       WHERE file_id = ? AND name = ? COLLATE NOCASE
+       ORDER BY (name = ?) DESC LIMIT 1`,
+    ).get(fileId, name, name) as Record<string, unknown> | undefined;
     return row ? goRowOut(row) : undefined;
   }
 
@@ -372,17 +375,14 @@ export class Store {
   getComponentsByType(typeName: string, fileId?: number): (ComponentRow & { id: number })[] {
     const rows =
       fileId !== undefined
-        ? (this.db
-            .prepare(
-              `SELECT c.* FROM components c
+        ? (this.prepare(
+            `SELECT c.* FROM components c
              JOIN game_objects g ON g.id = c.game_object_id
-             WHERE c.type_name = ? AND g.file_id = ?`,
-            )
-            .all(typeName, fileId) as Record<string, unknown>[])
-        : (this.prepare("SELECT * FROM components WHERE type_name = ?").all(typeName) as Record<
-            string,
-            unknown
-          >[]);
+             WHERE c.type_name = ? COLLATE NOCASE AND g.file_id = ?`,
+          ).all(typeName, fileId) as Record<string, unknown>[])
+        : (this.prepare("SELECT * FROM components WHERE type_name = ? COLLATE NOCASE").all(
+            typeName,
+          ) as Record<string, unknown>[]);
     return rows.map((row) => ({
       id: row.id as number,
       game_object_id: row.game_object_id as number,
@@ -458,9 +458,12 @@ export class Store {
   }
 
   getScriptByClassName(className: string): (ScriptRow & { id: number }) | undefined {
-    const row = this.prepare("SELECT * FROM scripts WHERE class_name = ? LIMIT 1").get(
-      className,
-    ) as Record<string, unknown> | undefined;
+    // Case-insensitive, but an exact-case match wins when both exist
+    const row = this.prepare(
+      `SELECT * FROM scripts
+       WHERE class_name = ? COLLATE NOCASE
+       ORDER BY (class_name = ?) DESC LIMIT 1`,
+    ).get(className, className) as Record<string, unknown> | undefined;
     return row ? scriptRowOut(row) : undefined;
   }
 
@@ -786,18 +789,29 @@ export class Store {
       });
   }
 
-  getRecentChanges(limit = 50): (ChangeLogRow & { id: number; path: string })[] {
-    const rows = this.db
-      .prepare(
-        `
+  getRecentChanges(limit = 50, since?: string): (ChangeLogRow & { id: number; path: string })[] {
+    const rows = (
+      since !== undefined
+        ? this.prepare(
+            `
+        SELECT cl.id, cl.file_id, cl.changed_at, cl.change_type, f.path
+        FROM change_log cl
+        JOIN files f ON f.id = cl.file_id
+        WHERE cl.changed_at > ?
+        ORDER BY cl.changed_at DESC
+        LIMIT ?
+      `,
+          ).all(since, limit)
+        : this.prepare(
+            `
         SELECT cl.id, cl.file_id, cl.changed_at, cl.change_type, f.path
         FROM change_log cl
         JOIN files f ON f.id = cl.file_id
         ORDER BY cl.changed_at DESC
         LIMIT ?
       `,
-      )
-      .all(limit) as Record<string, unknown>[];
+          ).all(limit)
+    ) as Record<string, unknown>[];
     return rows.map((row) => ({
       id: row.id as number,
       file_id: row.file_id as number,

@@ -9,20 +9,34 @@ const DOC_HEADER_RE = /^--- !u!(\d+) &(-?\d+)(?: stripped)?\s*$/;
 // (e.g. FlareLayer and Halo both serialize under "Behaviour").
 const GENERIC_ROOT_KEYS = new Set(["Behaviour"]);
 
-/**
- * Canonicalize a fileID so header-derived IDs compare equal to IDs parsed out
- * of YAML values. The YAML parser returns numbers, which lose precision beyond
- * 2^53 — Unity's random int64 fileIDs exceed that — so both sides must round
- * the same way.
- */
+/** Stringify a fileID value (string, number, or bigint) without losing precision. */
 export function canonicalFileId(raw: unknown): string {
-  if (typeof raw === "number") return String(raw);
-  if (typeof raw === "string") {
-    const n = Number(raw);
-    if (!Number.isNaN(n) && !Number.isSafeInteger(n)) return String(n);
-    return raw;
-  }
+  if (typeof raw === "number" || typeof raw === "bigint") return String(raw);
+  if (typeof raw === "string") return raw;
   return "";
+}
+
+/**
+ * YAML is parsed with intAsBigInt so Unity's random int64 fileIDs keep full
+ * precision (as float64 they collide: adjacent IDs like ...8001/...8002 round
+ * to the same value). BigInts can't be JSON-serialized, so convert them back:
+ * safe integers become numbers, the rest become exact decimal strings.
+ */
+function normalizeBigInts(value: unknown): unknown {
+  if (typeof value === "bigint") {
+    const n = Number(value);
+    return Number.isSafeInteger(n) ? n : String(value);
+  }
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) value[i] = normalizeBigInts(value[i]);
+    return value;
+  }
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of Object.keys(record)) record[key] = normalizeBigInts(record[key]);
+    return value;
+  }
+  return value;
 }
 
 export function parseUnityYaml(content: string): UnityYamlDocument[] {
@@ -50,8 +64,9 @@ export function parseUnityYaml(content: string): UnityYamlDocument[] {
 
     let data: Record<string, unknown>;
     try {
-      const doc = parseDocument(raw.body, { uniqueKeys: false });
-      data = (doc.toJS({ maxAliasCount: -1 }) as Record<string, unknown> | null) ?? {};
+      const doc = parseDocument(raw.body, { uniqueKeys: false, intAsBigInt: true });
+      data =
+        (normalizeBigInts(doc.toJS({ maxAliasCount: -1 })) as Record<string, unknown> | null) ?? {};
     } catch {
       data = parseYamlFallback(raw.body);
     }

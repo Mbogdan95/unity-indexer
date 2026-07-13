@@ -514,3 +514,70 @@ describe("handleBatchGetScriptDetail", () => {
     expect((unknown!.detail as Record<string, unknown>).error).toBeDefined();
   });
 });
+
+describe("handleGetSceneHierarchy — nested tree", () => {
+  it("returns nested children up to the default depth", () => {
+    const result = handleGetSceneHierarchy(store, {
+      scene: "Assets/Scenes/UIScene.unity",
+    }) as Record<string, unknown>;
+
+    const roots = result.roots as Array<Record<string, unknown>>;
+    const canvas = roots.find((r) => r.name === "Canvas");
+    expect(canvas).toBeDefined();
+    const canvasChildren = canvas!.children as Array<Record<string, unknown>>;
+    expect(canvasChildren.map((c) => c.name)).toContain("Panel");
+    const panel = canvasChildren.find((c) => c.name === "Panel")!;
+    const panelChildren = panel.children as Array<Record<string, unknown>>;
+    expect(panelChildren.map((c) => c.name)).toContain("Button");
+  });
+
+  it("depth 0 returns roots only with children summarized", () => {
+    const result = handleGetSceneHierarchy(store, {
+      scene: "Assets/Scenes/UIScene.unity",
+      depth: 0,
+    }) as Record<string, unknown>;
+
+    const roots = result.roots as Array<Record<string, unknown>>;
+    const canvas = roots.find((r) => r.name === "Canvas")!;
+    expect(canvas.children).toBeUndefined();
+    expect(canvas.child_count).toBe(1);
+  });
+
+  it("indexes negative-anchor uGUI scene with full hierarchy", () => {
+    const result = handleGetSceneHierarchy(store, {
+      scene: "Assets/Scenes/UIScene.unity",
+      depth: 10,
+    }) as Record<string, unknown>;
+    expect(result.total_game_objects).toBe(4);
+    const roots = result.roots as Array<Record<string, unknown>>;
+    expect(roots).toHaveLength(2);
+  });
+});
+
+describe("handleFindComponents — built-ins and case-insensitivity", () => {
+  it("finds uGUI built-in components by correct class-ID name", () => {
+    const result = handleFindComponents(store, { type: "Canvas" }) as Record<string, unknown>;
+    expect(result.total).toBe(1);
+    const comps = result.components as Array<Record<string, unknown>>;
+    expect(comps[0].game_object_name).toBe("Canvas");
+  });
+
+  it("matches component type case-insensitively", () => {
+    const result = handleFindComponents(store, { type: "recttransform" }) as Record<
+      string,
+      unknown
+    >;
+    expect(result.total).toBe(3);
+  });
+
+  it("truncates output at limit while reporting full total", () => {
+    const result = handleFindComponents(store, { type: "RectTransform", limit: 1 }) as Record<
+      string,
+      unknown
+    >;
+    expect(result.total).toBe(3);
+    expect(result.truncated).toBe(true);
+    const comps = result.components as Array<Record<string, unknown>>;
+    expect(comps).toHaveLength(1);
+  });
+});

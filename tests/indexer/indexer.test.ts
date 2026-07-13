@@ -28,15 +28,15 @@ describe("Indexer", () => {
     const files = store.listFiles();
     expect(files.length).toBeGreaterThan(0);
     const scenes = store.listFiles("scene");
-    expect(scenes.length).toBe(1);
-    expect(scenes[0].path).toContain("MainScene.unity");
+    expect(scenes.length).toBe(2);
+    expect(scenes.some((s) => s.path.includes("MainScene.unity"))).toBe(true);
   });
 
   it("indexes scene GameObjects and components", () => {
     indexer.indexAll();
     const scenes = store.listFiles("scene");
-    expect(scenes.length).toBe(1);
-    const sceneFile = scenes[0];
+    expect(scenes.length).toBe(2);
+    const sceneFile = scenes.find((s) => s.path.includes("MainScene.unity"))!;
     const gameObjects = store.getGameObjectsByFile(sceneFile.id);
     const player = gameObjects.find((go) => go.name === "Player");
     expect(player).toBeDefined();
@@ -75,7 +75,7 @@ describe("Indexer", () => {
   it("generates project summary", () => {
     indexer.indexAll();
     const summary = store.getProjectSummary();
-    expect(summary.scene_count).toBe(1);
+    expect(summary.scene_count).toBe(2);
     expect(summary.script_count).toBeGreaterThan(0);
   });
 
