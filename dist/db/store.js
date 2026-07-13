@@ -784,12 +784,13 @@ export class Store {
             rows.forEach((r) => results.push({ type: "file", ...r }));
         }
         if (!scope || scope === "game_objects") {
-            const termClauses = terms.map(() => "name LIKE ?").join(" AND ");
+            const termClauses = terms.map(() => "g.name LIKE ?").join(" AND ");
             const rows = this.db
-                .prepare(`SELECT id, name AS label, importance_score
-           FROM game_objects
+                .prepare(`SELECT g.id, g.name AS label, g.importance_score, f.path AS file_path
+           FROM game_objects g
+           JOIN files f ON f.id = g.file_id
            WHERE ${termClauses}
-           ORDER BY importance_score DESC
+           ORDER BY g.importance_score DESC
            LIMIT 50`)
                 .all(...terms);
             rows.forEach((r) => results.push({ type: "game_object", ...r }));

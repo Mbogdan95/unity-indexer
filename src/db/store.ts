@@ -939,7 +939,7 @@ export class Store {
   search(
     query: string,
     scope?: "files" | "game_objects" | "scripts",
-  ): { type: string; id: number; label: string; importance_score: number }[] {
+  ): { type: string; id: number; label: string; importance_score: number; file_path?: string }[] {
     const terms = query
       .trim()
       .split(/\s+/)
@@ -947,7 +947,13 @@ export class Store {
       .map((t) => `%${t}%`);
     if (terms.length === 0) return [];
 
-    const results: { type: string; id: number; label: string; importance_score: number }[] = [];
+    const results: {
+      type: string;
+      id: number;
+      label: string;
+      importance_score: number;
+      file_path?: string;
+    }[] = [];
 
     if (!scope || scope === "files") {
       // Each term must match path OR summary_line
@@ -966,16 +972,22 @@ export class Store {
     }
 
     if (!scope || scope === "game_objects") {
-      const termClauses = terms.map(() => "name LIKE ?").join(" AND ");
+      const termClauses = terms.map(() => "g.name LIKE ?").join(" AND ");
       const rows = this.db
         .prepare(
-          `SELECT id, name AS label, importance_score
-           FROM game_objects
+          `SELECT g.id, g.name AS label, g.importance_score, f.path AS file_path
+           FROM game_objects g
+           JOIN files f ON f.id = g.file_id
            WHERE ${termClauses}
-           ORDER BY importance_score DESC
+           ORDER BY g.importance_score DESC
            LIMIT 50`,
         )
-        .all(...terms) as { id: number; label: string; importance_score: number }[];
+        .all(...terms) as {
+        id: number;
+        label: string;
+        importance_score: number;
+        file_path: string;
+      }[];
       rows.forEach((r) => results.push({ type: "game_object", ...r }));
     }
 

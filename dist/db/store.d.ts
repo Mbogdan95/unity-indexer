@@ -123,6 +123,7 @@ export declare class Store {
         id: number;
         label: string;
         importance_score: number;
+        file_path?: string;
     }[];
     insertGraphEdge(edge: GraphEdgeRow): void;
     getGraphEdgesBySource(sourceType: GraphNodeType, sourceId: number): (GraphEdgeRow & {

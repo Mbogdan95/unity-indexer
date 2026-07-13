@@ -577,8 +577,8 @@ export function handleSearch(
         path = file ? store.prefixPath(file.path) : undefined;
         summary = file?.summary_line;
       } else if (r.type === "game_object") {
-        // label is the GO name
-        path = r.label;
+        // Show which scene/prefab the GameObject lives in
+        path = r.file_path !== undefined ? store.prefixPath(r.file_path) : r.label;
       } else if (r.type === "script") {
         // label is class_name
         path = r.label;
