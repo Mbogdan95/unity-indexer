@@ -4,16 +4,10 @@ This project has the unity-indexer MCP server active. Use these tools instead of
 
 ## Starting the server
 
-If tools are unavailable, start the server:
+The server starts automatically via this repo's `.mcp.json` (`node dist/bootstrap.js`). If tools are unavailable, run `npm run build` and restart the session. For manual runs during development:
 
 ```bash
-npx unity-indexer <path-to-unity-project>
-```
-
-For auto-discovery (watches for Unity projects):
-
-```bash
-npx unity-indexer
+npm run dev -- <path-to-unity-project>   # or omit the path for auto-discovery
 ```
 
 ## Available Tools (23)

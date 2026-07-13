@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "unity-indexer": {
-      "command": "npx",
-      "args": ["unity-indexer"]
-    }
-  }
-}

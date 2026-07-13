@@ -4,17 +4,7 @@ Use these MCP tools when working with Unity projects. They are faster and more t
 
 ## Server startup
 
-If tools return "no store" or are unavailable, start the server:
-
-```bash
-npx unity-indexer <path-to-unity-project>
-```
-
-For auto-discovery (scans 3 levels deep for Unity projects):
-
-```bash
-npx unity-indexer
-```
+The MCP server starts automatically with the plugin (auto-discovery scans 3 levels deep for Unity projects from the working directory). If tools return "no store" or are unavailable, the plugin may need reinstalling: `/plugin install unity-indexer@unity-indexer`, then restart the session.
 
 ## Tools (23)
 
