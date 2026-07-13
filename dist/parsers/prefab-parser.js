@@ -6,7 +6,7 @@ export function parsePrefab(content) {
     let isVariant = false;
     let sourcePrefabGuid = null;
     for (const doc of docs) {
-        if (doc.classId === 1001 || doc.classId === 1101) {
+        if (doc.classId === 1001) {
             const typeName = Object.keys(doc.data)[0];
             if (!typeName)
                 continue;
@@ -19,7 +19,7 @@ export function parsePrefab(content) {
         }
     }
     for (const doc of docs) {
-        if (doc.classId === 1001 || doc.classId === 1101) {
+        if (doc.classId === 1001) {
             const refs = extractReferences(doc.data, `PrefabInstance:${doc.fileId}`);
             for (const ref of refs) {
                 ref.refType = "prefab_variant";

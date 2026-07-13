@@ -20,5 +20,10 @@ export interface ClassBodyRange {
 }
 export declare function collectClassBodies(root: Node): ClassBodyRange[];
 export declare function findSourceClass(index: number, classBodies: ClassBodyRange[]): string;
+/** Parse once and run both relationship extractions on the same tree. */
+export declare function extractAllRelationships(content: string): {
+    relationships: ExtractedRelationship[];
+    typeReferences: ExtractedRelationship[];
+};
 export declare function extractRelationships(content: string): ExtractedRelationship[];
 export declare function extractTypeReferences(content: string): ExtractedRelationship[];

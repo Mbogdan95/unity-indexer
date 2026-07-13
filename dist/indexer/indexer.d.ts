@@ -21,6 +21,11 @@ export declare class Indexer {
      * Must be called after indexEssential().
      */
     indexScenesAndPrefabsBackground(): Promise<void>;
+    /**
+     * Remove DB rows for files deleted while the server was not running.
+     * Without this, files removed between sessions stay in the index forever.
+     */
+    private reconcileDeletions;
     private indexBatch;
     private indexBatchAsync;
     indexFile(relativePath: string): void;

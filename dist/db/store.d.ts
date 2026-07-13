@@ -62,6 +62,9 @@ export declare class Store {
     getScriptByFileId(fileId: number): (ScriptRow & {
         id: number;
     }) | undefined;
+    getScriptsByFileId(fileId: number): (ScriptRow & {
+        id: number;
+    })[];
     getScriptById(id: number): (ScriptRow & {
         id: number;
     }) | undefined;
@@ -90,9 +93,18 @@ export declare class Store {
     } | undefined;
     propagateMonoBehaviourInheritance(): void;
     assignScriptAssemblies(): void;
+    /** Clear all script→assembly assignments so assignScriptAssemblies() can recompute from scratch. */
+    resetScriptAssemblies(): void;
+    /**
+     * Resolve references whose target GUID was unknown when the reference was
+     * inserted (e.g. the referenced asset's .meta was indexed later). Also inserts
+     * the corresponding REFERENCES_GUID graph edges. Returns the number of
+     * references resolved.
+     */
+    resolveNullReferenceTargets(): number;
     insertAssembly(asm: AssemblyRow): number;
     insertChangeLog(entry: ChangeLogRow): void;
-    getRecentChanges(limit?: number): (ChangeLogRow & {
+    getRecentChanges(limit?: number, since?: string): (ChangeLogRow & {
         id: number;
         path: string;
     })[];

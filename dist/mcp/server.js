@@ -1,4 +1,3 @@
-import { existsSync, unlinkSync } from "fs";
 import { basename, join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -10,19 +9,6 @@ import { getProjectSummary, getProjectFiles } from "./resources.js";
 import { registerTools } from "./tools.js";
 import { registerGraphTools } from "./graph-tools.js";
 import { discoverUnityProjects, ensureDbDir } from "../discovery.js";
-function removeStaleJournals(dbPath) {
-    for (const suffix of ["-wal", "-shm", "-journal"]) {
-        const p = dbPath + suffix;
-        if (existsSync(p)) {
-            try {
-                unlinkSync(p);
-            }
-            catch {
-                // best-effort
-            }
-        }
-    }
-}
 function log(msg) {
     console.error(`[unity-indexer] ${msg}`);
 }
@@ -52,8 +38,9 @@ export async function startServer(rootDir) {
     for (const projectRoot of projectPaths) {
         const name = uniqueName(basename(projectRoot), usedNames);
         usedNames.add(name);
+        // Never delete WAL/SHM sidecars here: the WAL may hold committed data that
+        // SQLite replays on open, and a second live instance may be mid-write.
         const dbPath = join(dbDir, `${name}.db`);
-        removeStaleJournals(dbPath);
         log(`[${name}] project: ${projectRoot}`);
         log(`[${name}] database: ${dbPath}`);
         try {

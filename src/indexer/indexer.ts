@@ -19,7 +19,7 @@ import {
   computeGameObjectImportance,
   computeFileImportance,
 } from "../db/summaries.js";
-import { extractRelationships, extractTypeReferences } from "../parsers/relationship-extractor.js";
+import { extractAllRelationships } from "../parsers/relationship-extractor.js";
 import { detectFileType } from "../types.js";
 import type {
   ParsedGameObject,
@@ -798,19 +798,9 @@ export class Indexer {
       }
     }
 
-    // CALLS and SUBSCRIBES_TO edges
-    const relationships = extractRelationships(content);
-    for (const rel of relationships) {
-      const sourceScript = this.store.getScriptByClassName(rel.sourceClassName);
-      const targetScript = this.store.getScriptByClassName(rel.targetClassName);
-      if (sourceScript && targetScript) {
-        this.insertEdge("script", sourceScript.id, "script", targetScript.id, rel.edgeType, fileId);
-      }
-    }
-
-    // USES edges from field/param/local type references
-    const typeRefs = extractTypeReferences(content);
-    for (const rel of typeRefs) {
+    // CALLS/SUBSCRIBES_TO and USES edges — one tree-sitter parse for both
+    const { relationships, typeReferences } = extractAllRelationships(content);
+    for (const rel of [...relationships, ...typeReferences]) {
       const sourceScript = this.store.getScriptByClassName(rel.sourceClassName);
       const targetScript = this.store.getScriptByClassName(rel.targetClassName);
       if (sourceScript && targetScript) {
