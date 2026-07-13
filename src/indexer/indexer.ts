@@ -49,6 +49,7 @@ export class Indexer {
   indexAll(): void {
     const files = this.collectFiles();
     log(`found ${String(files.length)} files to index`);
+    this.reconcileDeletions(files);
 
     const metaFiles = files.filter((f) => f.endsWith(".meta"));
     const otherFiles = files.filter((f) => !f.endsWith(".meta"));
@@ -152,6 +153,7 @@ export class Indexer {
     // collectFiles blocks on large filesystems — yield again after
     await new Promise<void>((resolve) => setImmediate(resolve));
     log(`found ${String(files.length)} files to index`);
+    this.reconcileDeletions(files);
 
     const metaFiles = files.filter((f) => f.endsWith(".meta"));
     const otherFiles = files.filter((f) => !f.endsWith(".meta"));
@@ -253,6 +255,29 @@ export class Indexer {
     this.updateProjectSummary();
   }
 
+  /**
+   * Remove DB rows for files deleted while the server was not running.
+   * Without this, files removed between sessions stay in the index forever.
+   */
+  private reconcileDeletions(diskFiles: string[]): void {
+    const onDisk = new Set(diskFiles);
+    const stale = this.store.listFiles().filter((f) => !onDisk.has(f.path));
+    if (stale.length === 0) return;
+
+    log(`removing ${String(stale.length)} deleted file(s) from index`);
+    this.store.transaction(() => {
+      for (const file of stale) {
+        this.store.insertChangeLog({
+          file_id: file.id,
+          changed_at: new Date().toISOString(),
+          change_type: "deleted",
+        });
+        this.store.deleteFileData(file.id);
+        this.store.deleteFile(file.id);
+      }
+    });
+  }
+
   private indexBatch(files: string[], batchSize = 500): void {
     for (let i = 0; i < files.length; i += batchSize) {
       const batch = files.slice(i, i + batchSize);
@@ -283,21 +308,7 @@ export class Indexer {
   }
 
   indexFile(relativePath: string): void {
-    this.store.transaction(() => {
-      this.indexFileInternal(relativePath);
-    });
-    if (relativePath.endsWith(".cs")) {
-      this.store.transaction(() => {
-        this.indexScriptCrossEdges(relativePath);
-      });
-    }
-    // Incremental graph patch — only touch edges for this file, not the full graph
-    const file = this.store.getFileByPath(relativePath);
-    if (file) {
-      this.store.patchGraphForFile(file.id, this.store.getGraphEdgesForFile(file.id));
-    }
-    this.store.recomputeReferenceCounts();
-    this.updateProjectSummary();
+    this.flushChanges(new Map([[relativePath, "change"]]));
   }
 
   removeFile(relativePath: string): void {
@@ -329,6 +340,10 @@ export class Indexer {
   flushChanges(changes: ReadonlyMap<string, "add" | "change" | "unlink">): void {
     if (changes.size === 0) return;
 
+    let scriptsChanged = false;
+    let asmdefsChanged = false;
+    let metasChanged = false;
+
     for (const [relativePath, event] of changes) {
       if (event === "unlink") {
         const existing = this.store.getFileByPath(relativePath);
@@ -358,6 +373,25 @@ export class Indexer {
           this.store.patchGraphForFile(file.id, this.store.getGraphEdgesForFile(file.id));
         }
       }
+      if (relativePath.endsWith(".cs")) scriptsChanged = true;
+      else if (relativePath.endsWith(".asmdef")) asmdefsChanged = true;
+      else if (relativePath.endsWith(".meta")) metasChanged = true;
+    }
+
+    // Post-passes the full index also runs — without these, watcher-edited
+    // scripts keep an empty assembly_name and wrong is_monobehaviour.
+    if (asmdefsChanged) {
+      // An asmdef change can move existing scripts between assemblies.
+      this.store.resetScriptAssemblies();
+    }
+    if (scriptsChanged || asmdefsChanged) {
+      this.store.assignScriptAssemblies();
+      this.store.propagateMonoBehaviourInheritance();
+    }
+    if (metasChanged) {
+      // A new .meta can resolve references that predate the asset.
+      const resolved = this.store.resolveNullReferenceTargets();
+      if (resolved > 0) this.store.hydrateGraph();
     }
 
     // Heavy ops deferred to run once for the whole batch
@@ -713,22 +747,8 @@ export class Indexer {
 
       // Graph edges: DEFINED_IN
       this.insertEdge("script", scriptId, "file", fileId, "DEFINED_IN", fileId);
-
-      // Graph edges: INHERITS (if base_class resolves to a known script)
-      if (script.baseClass) {
-        const baseScript = this.store.getScriptByClassName(script.baseClass);
-        if (baseScript) {
-          this.insertEdge("script", scriptId, "script", baseScript.id, "INHERITS", fileId);
-        }
-      }
-
-      // Graph edges: IMPLEMENTS
-      for (const iface of script.interfaces) {
-        const ifaceScript = this.store.getScriptByClassName(iface);
-        if (ifaceScript) {
-          this.insertEdge("script", scriptId, "script", ifaceScript.id, "IMPLEMENTS", fileId);
-        }
-      }
+      // INHERITS/IMPLEMENTS edges are inserted in indexScriptCrossEdges (second
+      // pass) so base classes defined in files indexed later still resolve.
     }
 
     this.store.upsertFile({
@@ -760,6 +780,23 @@ export class Indexer {
     const fileRow = this.store.getFileByPath(relativePath);
     if (!fileRow) return;
     const fileId = fileRow.id;
+
+    // INHERITS / IMPLEMENTS edges — done here (not at insert time) so that
+    // base classes/interfaces defined in not-yet-indexed files still resolve.
+    for (const script of this.store.getScriptsByFileId(fileId)) {
+      if (script.base_class) {
+        const baseScript = this.store.getScriptByClassName(script.base_class);
+        if (baseScript && baseScript.id !== script.id) {
+          this.insertEdge("script", script.id, "script", baseScript.id, "INHERITS", fileId);
+        }
+      }
+      for (const iface of JSON.parse(script.interfaces) as string[]) {
+        const ifaceScript = this.store.getScriptByClassName(iface);
+        if (ifaceScript && ifaceScript.id !== script.id) {
+          this.insertEdge("script", script.id, "script", ifaceScript.id, "IMPLEMENTS", fileId);
+        }
+      }
+    }
 
     // CALLS and SUBSCRIBES_TO edges
     const relationships = extractRelationships(content);

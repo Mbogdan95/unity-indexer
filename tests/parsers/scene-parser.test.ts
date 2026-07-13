@@ -71,3 +71,58 @@ describe("parseScene", () => {
     expect(player.active).toBe(true);
   });
 });
+
+describe("uGUI and modern-format scenes", () => {
+  it("builds hierarchy through RectTransform (classId 224)", () => {
+    const content = `%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &100
+GameObject:
+  m_Name: Canvas
+  m_IsActive: 1
+  m_Component:
+  - component: {fileID: 101}
+--- !u!224 &101
+RectTransform:
+  m_GameObject: {fileID: 100}
+  m_Father: {fileID: 0}
+--- !u!1 &200
+GameObject:
+  m_Name: Button
+  m_IsActive: 1
+  m_Component:
+  - component: {fileID: 201}
+--- !u!224 &201
+RectTransform:
+  m_GameObject: {fileID: 200}
+  m_Father: {fileID: 101}
+`;
+    const scene = parseScene(content);
+    expect(scene.gameObjects).toHaveLength(2);
+    const canvas = scene.gameObjects.find((g) => g.name === "Canvas")!;
+    const button = scene.gameObjects.find((g) => g.name === "Button")!;
+    expect(canvas.parentFileIdLocal).toBeNull();
+    expect(button.parentFileIdLocal).toBe("100");
+    expect(canvas.components[0].typeName).toBe("RectTransform");
+  });
+
+  it("links components with unsafe-integer fileIDs (random int64)", () => {
+    const content = `%YAML 1.1
+--- !u!1 &-9110748745971813952
+GameObject:
+  m_Name: BigId
+  m_IsActive: 1
+  m_Component:
+  - component: {fileID: 8345145045156654994}
+--- !u!4 &8345145045156654994
+Transform:
+  m_GameObject: {fileID: -9110748745971813952}
+  m_Father: {fileID: 0}
+`;
+    const scene = parseScene(content);
+    expect(scene.gameObjects).toHaveLength(1);
+    expect(scene.gameObjects[0].name).toBe("BigId");
+    expect(scene.gameObjects[0].components).toHaveLength(1);
+    expect(scene.gameObjects[0].components[0].typeName).toBe("Transform");
+  });
+});

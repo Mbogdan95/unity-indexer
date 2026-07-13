@@ -2,7 +2,28 @@ import { parseDocument } from "yaml";
 import { UNITY_CLASS_IDS } from "../types.js";
 import type { UnityYamlDocument, ParsedGuidReference } from "../types.js";
 
-const DOC_HEADER_RE = /^--- !u!(\d+) &(\d+)(?: stripped)?$/;
+// Anchors are signed int64 since Unity 2018.3 (e.g. "&-8720842103846894243").
+const DOC_HEADER_RE = /^--- !u!(\d+) &(-?\d+)(?: stripped)?\s*$/;
+
+// Root keys that are serialized base-class names rather than concrete types
+// (e.g. FlareLayer and Halo both serialize under "Behaviour").
+const GENERIC_ROOT_KEYS = new Set(["Behaviour"]);
+
+/**
+ * Canonicalize a fileID so header-derived IDs compare equal to IDs parsed out
+ * of YAML values. The YAML parser returns numbers, which lose precision beyond
+ * 2^53 — Unity's random int64 fileIDs exceed that — so both sides must round
+ * the same way.
+ */
+export function canonicalFileId(raw: unknown): string {
+  if (typeof raw === "number") return String(raw);
+  if (typeof raw === "string") {
+    const n = Number(raw);
+    if (!Number.isNaN(n) && !Number.isSafeInteger(n)) return String(n);
+    return raw;
+  }
+  return "";
+}
 
 export function parseUnityYaml(content: string): UnityYamlDocument[] {
   const documents: UnityYamlDocument[] = [];
@@ -13,16 +34,19 @@ export function parseUnityYaml(content: string): UnityYamlDocument[] {
     if (!headerMatch) continue;
 
     const classId = parseInt(headerMatch[1], 10);
-    const fileId = headerMatch[2];
+    const fileId = canonicalFileId(headerMatch[2]);
     const stripped = raw.header.includes("stripped");
-    // Prefer the map for well-known IDs (gives concrete names like "FlareLayer" instead
-    // of the YAML base-class key "Behaviour"). Fall back to the YAML root key, which is
-    // always the actual class name for package/custom built-ins (e.g. "PlayableDirector").
+    // The YAML root key is the class name Unity writes for the object and is
+    // authoritative for concrete types (including package/custom built-ins the
+    // map doesn't know). Fall back to the class-ID map for the few built-ins
+    // that serialize under a base-class key and for docs with no body.
     const yamlRootKey = raw.body.match(/^(\w+):/)?.[1];
     const typeName =
-      classId in UNITY_CLASS_IDS
-        ? UNITY_CLASS_IDS[classId]
-        : (yamlRootKey ?? `UnknownType_${String(classId)}`);
+      yamlRootKey !== undefined && !GENERIC_ROOT_KEYS.has(yamlRootKey)
+        ? yamlRootKey
+        : classId in UNITY_CLASS_IDS
+          ? UNITY_CLASS_IDS[classId]
+          : (yamlRootKey ?? `UnknownType_${String(classId)}`);
 
     let data: Record<string, unknown>;
     try {
@@ -45,7 +69,8 @@ interface RawDocument {
 
 function splitDocuments(content: string): RawDocument[] {
   const docs: RawDocument[] = [];
-  const lines = content.split("\n");
+  // Split on \r?\n so CRLF checkouts parse identically to LF ones.
+  const lines = content.split(/\r?\n/);
   let currentHeader = "";
   let currentBody: string[] = [];
 

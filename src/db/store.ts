@@ -471,6 +471,14 @@ export class Store {
     return row ? scriptRowOut(row) : undefined;
   }
 
+  getScriptsByFileId(fileId: number): (ScriptRow & { id: number })[] {
+    const rows = this.prepare("SELECT * FROM scripts WHERE file_id = ?").all(fileId) as Record<
+      string,
+      unknown
+    >[];
+    return rows.map(scriptRowOut);
+  }
+
   getScriptById(id: number): (ScriptRow & { id: number }) | undefined {
     const row = this.prepare("SELECT * FROM scripts WHERE id = ? LIMIT 1").get(id) as
       | Record<string, unknown>
@@ -704,6 +712,41 @@ export class Store {
       WHERE assembly_name = '' OR assembly_name IS NULL
     `,
     ).run();
+  }
+
+  /** Clear all script→assembly assignments so assignScriptAssemblies() can recompute from scratch. */
+  resetScriptAssemblies(): void {
+    this.prepare("UPDATE scripts SET assembly_name = ''").run();
+  }
+
+  /**
+   * Resolve references whose target GUID was unknown when the reference was
+   * inserted (e.g. the referenced asset's .meta was indexed later). Also inserts
+   * the corresponding REFERENCES_GUID graph edges. Returns the number of
+   * references resolved.
+   */
+  resolveNullReferenceTargets(): number {
+    const result = this.prepare(
+      `
+      UPDATE "references"
+      SET target_file_id = (SELECT g.file_id FROM guids g WHERE g.guid = target_guid)
+      WHERE target_file_id IS NULL
+        AND EXISTS (SELECT 1 FROM guids g WHERE g.guid = target_guid)
+    `,
+    ).run();
+
+    if (result.changes > 0) {
+      this.prepare(
+        `
+        INSERT OR IGNORE INTO graph_edges
+          (source_type, source_id, target_type, target_id, edge_type, metadata, source_file_id)
+        SELECT 'file', r.source_file_id, 'file', r.target_file_id, 'REFERENCES_GUID', NULL, r.source_file_id
+        FROM "references" r
+        WHERE r.target_file_id IS NOT NULL
+      `,
+      ).run();
+    }
+    return result.changes;
   }
 
   insertAssembly(asm: AssemblyRow): number {
