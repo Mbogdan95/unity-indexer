@@ -121,3 +121,40 @@ describe("Indexer", () => {
     expect(outgoing.some((n) => n.nodeId === pcNodeId)).toBe(true);
   });
 });
+
+describe("Indexer — incremental cross-file edge relinking", () => {
+  it("re-links INHERITS edges from dependent files after a base class file changes", async () => {
+    const { mkdtempSync, cpSync, appendFileSync, rmSync } = await import("fs");
+    const { tmpdir } = await import("os");
+    const { join: joinPath } = await import("path");
+
+    const tmp = mkdtempSync(joinPath(tmpdir(), "unity-idx-test-"));
+    try {
+      cpSync(FIXTURES, tmp, { recursive: true });
+      const tmpStore = new Store(":memory:");
+      const tmpIndexer = new Indexer(tmpStore, tmp);
+      tmpIndexer.indexAll();
+
+      const before = tmpStore.getScriptByClassName("PlayerController")!;
+      const bossBefore = tmpStore.graph.getIncoming(`script:${String(before.id)}`, ["INHERITS"]);
+      expect(bossBefore.length).toBeGreaterThan(0);
+
+      // Simulate a watcher edit: content change → script rows re-inserted with new ids
+      appendFileSync(joinPath(tmp, "Assets/Scripts/PlayerController.cs"), "\n// touched\n");
+      tmpIndexer.flushChanges(new Map([["Assets/Scripts/PlayerController.cs", "change"]]));
+
+      const after = tmpStore.getScriptByClassName("PlayerController")!;
+      expect(after.id).not.toBe(before.id);
+
+      // No dangling edges may remain...
+      expect(tmpStore.deleteDanglingScriptEdges()).toBe(0);
+      // ...and BossController's INHERITS edge must point at the NEW script id
+      const bossAfter = tmpStore.graph.getIncoming(`script:${String(after.id)}`, ["INHERITS"]);
+      expect(bossAfter.length).toBeGreaterThan(0);
+
+      tmpStore.close();
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});

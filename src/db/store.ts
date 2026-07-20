@@ -1058,6 +1058,42 @@ export class Store {
     this.prepare("DELETE FROM graph_edges WHERE source_file_id = ?").run(fileId);
   }
 
+  /**
+   * Paths of other script files that hold graph edges pointing at scripts
+   * defined in `fileId`. Used to re-link cross edges after this file's scripts
+   * are re-inserted (which changes their row ids).
+   */
+  getScriptDependentFiles(fileId: number): string[] {
+    const rows = this.prepare(
+      `
+      SELECT DISTINCT f.path
+      FROM graph_edges e
+      JOIN files f ON f.id = e.source_file_id
+      WHERE e.target_type = 'script'
+        AND e.target_id IN (SELECT id FROM scripts WHERE file_id = ?)
+        AND e.source_file_id != ?
+        AND f.type = 'script'
+    `,
+    ).all(fileId, fileId) as { path: string }[];
+    return rows.map((r) => r.path);
+  }
+
+  /**
+   * Remove graph edges whose script endpoint no longer exists (script rows get
+   * new ids on re-index, so edges from OTHER files go stale). Returns rows removed.
+   */
+  deleteDanglingScriptEdges(): number {
+    const a = this.prepare(
+      `DELETE FROM graph_edges
+       WHERE target_type = 'script' AND target_id NOT IN (SELECT id FROM scripts)`,
+    ).run();
+    const b = this.prepare(
+      `DELETE FROM graph_edges
+       WHERE source_type = 'script' AND source_id NOT IN (SELECT id FROM scripts)`,
+    ).run();
+    return a.changes + b.changes;
+  }
+
   getAllGraphEdges(): (GraphEdgeRow & { id: number })[] {
     return this.prepare("SELECT * FROM graph_edges").all() as (GraphEdgeRow & { id: number })[];
   }

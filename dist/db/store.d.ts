@@ -133,6 +133,17 @@ export declare class Store {
         id: number;
     })[];
     deleteGraphEdgesByFile(fileId: number): void;
+    /**
+     * Paths of other script files that hold graph edges pointing at scripts
+     * defined in `fileId`. Used to re-link cross edges after this file's scripts
+     * are re-inserted (which changes their row ids).
+     */
+    getScriptDependentFiles(fileId: number): string[];
+    /**
+     * Remove graph edges whose script endpoint no longer exists (script rows get
+     * new ids on re-index, so edges from OTHER files go stale). Returns rows removed.
+     */
+    deleteDanglingScriptEdges(): number;
     getAllGraphEdges(): (GraphEdgeRow & {
         id: number;
     })[];

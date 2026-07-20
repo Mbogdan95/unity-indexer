@@ -178,3 +178,29 @@ describe("handleFindImplementors", () => {
     expect(implementors).toHaveLength(0);
   });
 });
+
+describe("handleFindImplementors — subclasses", () => {
+  it("includes direct implementors and their subclasses", () => {
+    const result = handleFindImplementors(store, { interface_name: "IDamageable" }) as Record<
+      string,
+      unknown
+    >;
+    const impls = result.implementors as Array<Record<string, unknown>>;
+    const names = impls.map((i) => i.class_name);
+    expect(names).toContain("PlayerController");
+    expect(names).toContain("BossController");
+    const boss = impls.find((i) => i.class_name === "BossController")!;
+    expect(boss.via).toBe("inherits PlayerController");
+  });
+
+  it("excludes subclasses when include_subclasses is false", () => {
+    const result = handleFindImplementors(store, {
+      interface_name: "IDamageable",
+      include_subclasses: false,
+    }) as Record<string, unknown>;
+    const impls = result.implementors as Array<Record<string, unknown>>;
+    const names = impls.map((i) => i.class_name);
+    expect(names).toContain("PlayerController");
+    expect(names).not.toContain("BossController");
+  });
+});

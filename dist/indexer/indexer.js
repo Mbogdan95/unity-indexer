@@ -279,6 +279,22 @@ export class Indexer {
         let scriptsChanged = false;
         let asmdefsChanged = false;
         let metasChanged = false;
+        // Re-indexing a script file re-inserts its script rows under NEW ids, so
+        // cross edges from OTHER files targeting the old ids go stale. Collect
+        // those dependents BEFORE mutating, re-link them after.
+        const dependentScriptFiles = new Set();
+        for (const [relativePath] of changes) {
+            if (!relativePath.endsWith(".cs"))
+                continue;
+            const existing = this.store.getFileByPath(relativePath);
+            if (!existing)
+                continue;
+            for (const dep of this.store.getScriptDependentFiles(existing.id)) {
+                dependentScriptFiles.add(dep);
+            }
+        }
+        for (const path of changes.keys())
+            dependentScriptFiles.delete(path);
         for (const [relativePath, event] of changes) {
             if (event === "unlink") {
                 const existing = this.store.getFileByPath(relativePath);
@@ -326,6 +342,18 @@ export class Indexer {
         if (scriptsChanged || asmdefsChanged) {
             this.store.assignScriptAssemblies();
             this.store.propagateMonoBehaviourInheritance();
+        }
+        if (scriptsChanged) {
+            const dangling = this.store.deleteDanglingScriptEdges();
+            for (const dep of dependentScriptFiles) {
+                this.store.transaction(() => {
+                    this.indexScriptCrossEdges(dep);
+                });
+            }
+            if (dangling > 0 || dependentScriptFiles.size > 0) {
+                // Cheaper per-file patches can't express cross-file edge removal
+                this.store.hydrateGraph();
+            }
         }
         if (metasChanged) {
             // A new .meta can resolve references that predate the asset.
