@@ -1,6 +1,5 @@
-import { parseUnityYaml, extractReferences } from "./unity-yaml.js";
+import { parseUnityYaml, extractReferences, canonicalFileId } from "./unity-yaml.js";
 import { stripDefaults } from "./defaults.js";
-import { UNITY_CLASS_IDS } from "../types.js";
 import type {
   UnityYamlDocument,
   ParsedScene,
@@ -12,6 +11,12 @@ import type {
 export function parseScene(content: string): ParsedScene {
   const docs = parseUnityYaml(content);
   return buildScene(docs);
+}
+
+// Transform (4) and RectTransform (224, used by all uGUI objects) both carry
+// the m_GameObject / m_Father links that define the hierarchy.
+function isTransformDoc(doc: UnityYamlDocument): boolean {
+  return doc.classId === 4 || doc.classId === 224;
 }
 
 export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
@@ -28,20 +33,12 @@ export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
   // Transform docs (classId === 4) have m_GameObject back-ref
   const transformToGo = new Map<string, string>(); // transformFileId → goFileId
   for (const doc of docs) {
-    if (doc.classId === 4) {
-      const data =
-        (doc.data[doc.typeName] as Record<string, unknown> | undefined) ??
-        (doc.data["Transform"] as Record<string, unknown> | undefined);
+    if (isTransformDoc(doc)) {
+      const data = getDocData(doc);
       if (!data) continue;
       const goRef = data["m_GameObject"] as Record<string, unknown> | undefined;
       if (goRef !== undefined) {
-        const rawFileID = goRef["fileID"];
-        const goFileId =
-          typeof rawFileID === "string"
-            ? rawFileID
-            : typeof rawFileID === "number"
-              ? String(rawFileID)
-              : "";
+        const goFileId = canonicalFileId(goRef["fileID"]);
         if (goFileId !== "" && goFileId !== "0") {
           transformToGo.set(doc.fileId, goFileId);
         }
@@ -52,7 +49,7 @@ export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
   // Build hierarchy: for each GO, find parent GO via Transform.m_Father
   const parentMap = new Map<string, string | null>(); // goFileId → parentGoFileId | null
   for (const doc of docs) {
-    if (doc.classId === 4) {
+    if (isTransformDoc(doc)) {
       const data = getDocData(doc);
       if (!data) continue;
       const fatherRef = data["m_Father"] as Record<string, unknown> | undefined;
@@ -60,13 +57,7 @@ export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
       if (ownerGoFileId === undefined) continue;
 
       if (fatherRef !== undefined) {
-        const rawFatherID = fatherRef["fileID"];
-        const fatherFileId =
-          typeof rawFatherID === "string"
-            ? rawFatherID
-            : typeof rawFatherID === "number"
-              ? String(rawFatherID)
-              : "0";
+        const fatherFileId = canonicalFileId(fatherRef["fileID"]) || "0";
         if (fatherFileId !== "" && fatherFileId !== "0") {
           // fatherFileId is parent Transform's fileId → map to parent GO
           const parentGoFileId = transformToGo.get(fatherFileId) ?? null;
@@ -111,13 +102,7 @@ export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
       const compRef = componentRefs[order];
       const componentEntry = compRef["component"] as Record<string, unknown> | undefined;
       if (componentEntry === undefined) continue;
-      const rawCompFileID = componentEntry["fileID"];
-      const compFileId =
-        typeof rawCompFileID === "string"
-          ? rawCompFileID
-          : typeof rawCompFileID === "number"
-            ? String(rawCompFileID)
-            : "";
+      const compFileId = canonicalFileId(componentEntry["fileID"]);
       if (compFileId === "" || compFileId === "0") continue;
 
       const compDoc = docByFileId.get(compFileId);
@@ -126,7 +111,7 @@ export function buildScene(docs: UnityYamlDocument[]): ParsedScene {
       const compData = getDocData(compDoc);
       if (!compData) continue;
 
-      const typeName = UNITY_CLASS_IDS[compDoc.classId] ?? compDoc.typeName;
+      const typeName = compDoc.typeName;
 
       // Extract script GUID for MonoBehaviour
       let scriptGuid: string | null = null;

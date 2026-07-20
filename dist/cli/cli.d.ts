@@ -1,14 +1,7 @@
-import type { Scope } from "./settings.js";
 export type CliAction = {
     kind: "help";
 } | {
     kind: "version";
-} | {
-    kind: "install";
-    scope: Scope;
-} | {
-    kind: "uninstall";
-    scope: Scope;
 } | {
     kind: "server";
     projectRoot: string | undefined;

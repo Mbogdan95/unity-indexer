@@ -257,9 +257,12 @@ export class Store {
   }
 
   getGameObjectByName(fileId: number, name: string): (GameObjectRow & { id: number }) | undefined {
-    const row = this.db
-      .prepare("SELECT * FROM game_objects WHERE file_id = ? AND name = ? LIMIT 1")
-      .get(fileId, name) as Record<string, unknown> | undefined;
+    // Case-insensitive, but an exact-case match wins when both exist
+    const row = this.prepare(
+      `SELECT * FROM game_objects
+       WHERE file_id = ? AND name = ? COLLATE NOCASE
+       ORDER BY (name = ?) DESC LIMIT 1`,
+    ).get(fileId, name, name) as Record<string, unknown> | undefined;
     return row ? goRowOut(row) : undefined;
   }
 
@@ -372,17 +375,14 @@ export class Store {
   getComponentsByType(typeName: string, fileId?: number): (ComponentRow & { id: number })[] {
     const rows =
       fileId !== undefined
-        ? (this.db
-            .prepare(
-              `SELECT c.* FROM components c
+        ? (this.prepare(
+            `SELECT c.* FROM components c
              JOIN game_objects g ON g.id = c.game_object_id
-             WHERE c.type_name = ? AND g.file_id = ?`,
-            )
-            .all(typeName, fileId) as Record<string, unknown>[])
-        : (this.prepare("SELECT * FROM components WHERE type_name = ?").all(typeName) as Record<
-            string,
-            unknown
-          >[]);
+             WHERE c.type_name = ? COLLATE NOCASE AND g.file_id = ?`,
+          ).all(typeName, fileId) as Record<string, unknown>[])
+        : (this.prepare("SELECT * FROM components WHERE type_name = ? COLLATE NOCASE").all(
+            typeName,
+          ) as Record<string, unknown>[]);
     return rows.map((row) => ({
       id: row.id as number,
       game_object_id: row.game_object_id as number,
@@ -458,9 +458,12 @@ export class Store {
   }
 
   getScriptByClassName(className: string): (ScriptRow & { id: number }) | undefined {
-    const row = this.prepare("SELECT * FROM scripts WHERE class_name = ? LIMIT 1").get(
-      className,
-    ) as Record<string, unknown> | undefined;
+    // Case-insensitive, but an exact-case match wins when both exist
+    const row = this.prepare(
+      `SELECT * FROM scripts
+       WHERE class_name = ? COLLATE NOCASE
+       ORDER BY (class_name = ?) DESC LIMIT 1`,
+    ).get(className, className) as Record<string, unknown> | undefined;
     return row ? scriptRowOut(row) : undefined;
   }
 
@@ -469,6 +472,14 @@ export class Store {
       | Record<string, unknown>
       | undefined;
     return row ? scriptRowOut(row) : undefined;
+  }
+
+  getScriptsByFileId(fileId: number): (ScriptRow & { id: number })[] {
+    const rows = this.prepare("SELECT * FROM scripts WHERE file_id = ?").all(fileId) as Record<
+      string,
+      unknown
+    >[];
+    return rows.map(scriptRowOut);
   }
 
   getScriptById(id: number): (ScriptRow & { id: number }) | undefined {
@@ -706,6 +717,41 @@ export class Store {
     ).run();
   }
 
+  /** Clear all script→assembly assignments so assignScriptAssemblies() can recompute from scratch. */
+  resetScriptAssemblies(): void {
+    this.prepare("UPDATE scripts SET assembly_name = ''").run();
+  }
+
+  /**
+   * Resolve references whose target GUID was unknown when the reference was
+   * inserted (e.g. the referenced asset's .meta was indexed later). Also inserts
+   * the corresponding REFERENCES_GUID graph edges. Returns the number of
+   * references resolved.
+   */
+  resolveNullReferenceTargets(): number {
+    const result = this.prepare(
+      `
+      UPDATE "references"
+      SET target_file_id = (SELECT g.file_id FROM guids g WHERE g.guid = target_guid)
+      WHERE target_file_id IS NULL
+        AND EXISTS (SELECT 1 FROM guids g WHERE g.guid = target_guid)
+    `,
+    ).run();
+
+    if (result.changes > 0) {
+      this.prepare(
+        `
+        INSERT OR IGNORE INTO graph_edges
+          (source_type, source_id, target_type, target_id, edge_type, metadata, source_file_id)
+        SELECT 'file', r.source_file_id, 'file', r.target_file_id, 'REFERENCES_GUID', NULL, r.source_file_id
+        FROM "references" r
+        WHERE r.target_file_id IS NOT NULL
+      `,
+      ).run();
+    }
+    return result.changes;
+  }
+
   insertAssembly(asm: AssemblyRow): number {
     const stmt = this.prepare(`
       INSERT INTO assemblies
@@ -743,18 +789,29 @@ export class Store {
       });
   }
 
-  getRecentChanges(limit = 50): (ChangeLogRow & { id: number; path: string })[] {
-    const rows = this.db
-      .prepare(
-        `
+  getRecentChanges(limit = 50, since?: string): (ChangeLogRow & { id: number; path: string })[] {
+    const rows = (
+      since !== undefined
+        ? this.prepare(
+            `
+        SELECT cl.id, cl.file_id, cl.changed_at, cl.change_type, f.path
+        FROM change_log cl
+        JOIN files f ON f.id = cl.file_id
+        WHERE cl.changed_at > ?
+        ORDER BY cl.changed_at DESC
+        LIMIT ?
+      `,
+          ).all(since, limit)
+        : this.prepare(
+            `
         SELECT cl.id, cl.file_id, cl.changed_at, cl.change_type, f.path
         FROM change_log cl
         JOIN files f ON f.id = cl.file_id
         ORDER BY cl.changed_at DESC
         LIMIT ?
       `,
-      )
-      .all(limit) as Record<string, unknown>[];
+          ).all(limit)
+    ) as Record<string, unknown>[];
     return rows.map((row) => ({
       id: row.id as number,
       file_id: row.file_id as number,
@@ -882,7 +939,7 @@ export class Store {
   search(
     query: string,
     scope?: "files" | "game_objects" | "scripts",
-  ): { type: string; id: number; label: string; importance_score: number }[] {
+  ): { type: string; id: number; label: string; importance_score: number; file_path?: string }[] {
     const terms = query
       .trim()
       .split(/\s+/)
@@ -890,7 +947,13 @@ export class Store {
       .map((t) => `%${t}%`);
     if (terms.length === 0) return [];
 
-    const results: { type: string; id: number; label: string; importance_score: number }[] = [];
+    const results: {
+      type: string;
+      id: number;
+      label: string;
+      importance_score: number;
+      file_path?: string;
+    }[] = [];
 
     if (!scope || scope === "files") {
       // Each term must match path OR summary_line
@@ -909,16 +972,22 @@ export class Store {
     }
 
     if (!scope || scope === "game_objects") {
-      const termClauses = terms.map(() => "name LIKE ?").join(" AND ");
+      const termClauses = terms.map(() => "g.name LIKE ?").join(" AND ");
       const rows = this.db
         .prepare(
-          `SELECT id, name AS label, importance_score
-           FROM game_objects
+          `SELECT g.id, g.name AS label, g.importance_score, f.path AS file_path
+           FROM game_objects g
+           JOIN files f ON f.id = g.file_id
            WHERE ${termClauses}
-           ORDER BY importance_score DESC
+           ORDER BY g.importance_score DESC
            LIMIT 50`,
         )
-        .all(...terms) as { id: number; label: string; importance_score: number }[];
+        .all(...terms) as {
+        id: number;
+        label: string;
+        importance_score: number;
+        file_path: string;
+      }[];
       rows.forEach((r) => results.push({ type: "game_object", ...r }));
     }
 
@@ -987,6 +1056,42 @@ export class Store {
 
   deleteGraphEdgesByFile(fileId: number): void {
     this.prepare("DELETE FROM graph_edges WHERE source_file_id = ?").run(fileId);
+  }
+
+  /**
+   * Paths of other script files that hold graph edges pointing at scripts
+   * defined in `fileId`. Used to re-link cross edges after this file's scripts
+   * are re-inserted (which changes their row ids).
+   */
+  getScriptDependentFiles(fileId: number): string[] {
+    const rows = this.prepare(
+      `
+      SELECT DISTINCT f.path
+      FROM graph_edges e
+      JOIN files f ON f.id = e.source_file_id
+      WHERE e.target_type = 'script'
+        AND e.target_id IN (SELECT id FROM scripts WHERE file_id = ?)
+        AND e.source_file_id != ?
+        AND f.type = 'script'
+    `,
+    ).all(fileId, fileId) as { path: string }[];
+    return rows.map((r) => r.path);
+  }
+
+  /**
+   * Remove graph edges whose script endpoint no longer exists (script rows get
+   * new ids on re-index, so edges from OTHER files go stale). Returns rows removed.
+   */
+  deleteDanglingScriptEdges(): number {
+    const a = this.prepare(
+      `DELETE FROM graph_edges
+       WHERE target_type = 'script' AND target_id NOT IN (SELECT id FROM scripts)`,
+    ).run();
+    const b = this.prepare(
+      `DELETE FROM graph_edges
+       WHERE source_type = 'script' AND source_id NOT IN (SELECT id FROM scripts)`,
+    ).run();
+    return a.changes + b.changes;
   }
 
   getAllGraphEdges(): (GraphEdgeRow & { id: number })[] {

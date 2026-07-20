@@ -62,6 +62,9 @@ export declare class Store {
     getScriptByFileId(fileId: number): (ScriptRow & {
         id: number;
     }) | undefined;
+    getScriptsByFileId(fileId: number): (ScriptRow & {
+        id: number;
+    })[];
     getScriptById(id: number): (ScriptRow & {
         id: number;
     }) | undefined;
@@ -90,9 +93,18 @@ export declare class Store {
     } | undefined;
     propagateMonoBehaviourInheritance(): void;
     assignScriptAssemblies(): void;
+    /** Clear all script→assembly assignments so assignScriptAssemblies() can recompute from scratch. */
+    resetScriptAssemblies(): void;
+    /**
+     * Resolve references whose target GUID was unknown when the reference was
+     * inserted (e.g. the referenced asset's .meta was indexed later). Also inserts
+     * the corresponding REFERENCES_GUID graph edges. Returns the number of
+     * references resolved.
+     */
+    resolveNullReferenceTargets(): number;
     insertAssembly(asm: AssemblyRow): number;
     insertChangeLog(entry: ChangeLogRow): void;
-    getRecentChanges(limit?: number): (ChangeLogRow & {
+    getRecentChanges(limit?: number, since?: string): (ChangeLogRow & {
         id: number;
         path: string;
     })[];
@@ -111,6 +123,7 @@ export declare class Store {
         id: number;
         label: string;
         importance_score: number;
+        file_path?: string;
     }[];
     insertGraphEdge(edge: GraphEdgeRow): void;
     getGraphEdgesBySource(sourceType: GraphNodeType, sourceId: number): (GraphEdgeRow & {
@@ -120,6 +133,17 @@ export declare class Store {
         id: number;
     })[];
     deleteGraphEdgesByFile(fileId: number): void;
+    /**
+     * Paths of other script files that hold graph edges pointing at scripts
+     * defined in `fileId`. Used to re-link cross edges after this file's scripts
+     * are re-inserted (which changes their row ids).
+     */
+    getScriptDependentFiles(fileId: number): string[];
+    /**
+     * Remove graph edges whose script endpoint no longer exists (script rows get
+     * new ids on re-index, so edges from OTHER files go stale). Returns rows removed.
+     */
+    deleteDanglingScriptEdges(): number;
     getAllGraphEdges(): (GraphEdgeRow & {
         id: number;
     })[];

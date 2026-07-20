@@ -33,5 +33,6 @@ export declare function handleGetGraphStats(store: Store, params: {
 }): object;
 export declare function handleFindImplementors(store: Store, params: {
     interface_name: string;
+    include_subclasses?: boolean;
 }): object;
 export declare function registerGraphTools(server: McpServer, resolveStore: StoreResolver): void;

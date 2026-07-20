@@ -33,7 +33,7 @@ afterAll(() => {
 describe("Integration: full pipeline", () => {
   it("project summary provides orientation in ~200 tokens", () => {
     const summary = getProjectSummary(store) as any;
-    expect(summary.scenes).toBe(1);
+    expect(summary.scenes).toBe(2);
     expect(summary.scripts).toBeGreaterThan(0);
     expect(summary.description).toContain("Unity project");
     const jsonSize = JSON.stringify(summary).length;

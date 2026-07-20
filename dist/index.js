@@ -3,17 +3,9 @@ import { readFileSync } from "fs";
 import { resolve, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { parseArgs, getHelpText } from "./cli/cli.js";
-import { resolveSettingsPath, installServer, uninstallServer } from "./cli/settings.js";
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
 const version = JSON.parse(readFileSync(pkgPath, "utf-8")).version;
-let action;
-try {
-    action = parseArgs(process.argv.slice(2));
-}
-catch (err) {
-    console.error(String(err instanceof Error ? err.message : err));
-    process.exit(1);
-}
+const action = parseArgs(process.argv.slice(2));
 switch (action.kind) {
     case "help": {
         console.log(getHelpText(version));
@@ -22,26 +14,6 @@ switch (action.kind) {
     }
     case "version": {
         console.log(version);
-        process.exit(0);
-        break;
-    }
-    case "install": {
-        const filePath = resolveSettingsPath(action.scope);
-        installServer(filePath);
-        console.log(`Installed unity-indexer in ${action.scope} settings: ${filePath}`);
-        process.exit(0);
-        break;
-    }
-    case "uninstall": {
-        try {
-            const filePath = resolveSettingsPath(action.scope);
-            uninstallServer(filePath);
-            console.log(`Removed unity-indexer from ${action.scope} settings: ${filePath}`);
-        }
-        catch (err) {
-            console.error(String(err instanceof Error ? err.message : err));
-            process.exit(1);
-        }
         process.exit(0);
         break;
     }

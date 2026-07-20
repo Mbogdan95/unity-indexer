@@ -6,6 +6,11 @@ import { analyzeFile, } from "../parsers/unused-analyzer.js";
 function estimateTokens(obj) {
     return Math.ceil(JSON.stringify(obj).length / 4);
 }
+/** Cap a result list; `total` should still report the un-truncated count. */
+function bound(items, limit, defaultLimit) {
+    const max = limit ?? defaultLimit;
+    return items.length > max ? items.slice(0, max) : items;
+}
 function resolveToNodeId(store, identifier) {
     const script = store.getScriptByClassName(identifier);
     if (script)
@@ -17,9 +22,6 @@ function resolveToNodeId(store, identifier) {
         return identifier;
     return null;
 }
-// ---------------------------------------------------------------------------
-// Handler functions (exported for testing)
-// ---------------------------------------------------------------------------
 export function handleGetSceneHierarchy(store, params) {
     const file = store.getFileByPath(store.stripPrefix(params.scene));
     if (!file)
@@ -34,33 +36,60 @@ export function handleGetSceneHierarchy(store, params) {
             resolvedFrom = baseFile ? store.prefixPath(baseFile.path) : undefined;
         }
     }
-    const maxDepth = params.depth ?? Infinity;
+    const maxDepth = params.depth ?? 2;
     const filterLower = params.filter?.toLowerCase();
-    const filtered = allGOs.filter((go) => {
-        if (go.depth > maxDepth)
-            return false;
-        if (filterLower !== undefined) {
-            const nameMatch = go.name.toLowerCase().includes(filterLower);
-            const tagMatch = go.tag.toLowerCase().includes(filterLower);
-            if (!nameMatch && !tagMatch)
-                return false;
+    // byParent preserves sibling order (query sorts by depth, sibling_index)
+    const byParent = new Map();
+    const byLocalId = new Map(allGOs.map((go) => [go.file_id_local, go]));
+    for (const go of allGOs) {
+        const siblings = byParent.get(go.parent_file_id_local) ?? [];
+        siblings.push(go);
+        byParent.set(go.parent_file_id_local, siblings);
+    }
+    // With a filter, keep matching nodes plus their ancestors (tree stays connected)
+    let included = null;
+    if (filterLower !== undefined) {
+        included = new Set();
+        for (const go of allGOs) {
+            const matches = go.name.toLowerCase().includes(filterLower) || go.tag.toLowerCase().includes(filterLower);
+            if (!matches)
+                continue;
+            let cur = go;
+            while (cur && !included.has(cur.file_id_local)) {
+                included.add(cur.file_id_local);
+                cur =
+                    cur.parent_file_id_local !== null ? byLocalId.get(cur.parent_file_id_local) : undefined;
+            }
         }
-        return true;
-    });
-    const roots = filtered
-        .filter((go) => go.parent_file_id_local === null)
+    }
+    const buildNode = (go, depth) => {
+        const children = (byParent.get(go.file_id_local) ?? []).filter((c) => included === null || included.has(c.file_id_local));
+        const node = {
+            name: go.name,
+            components: go.component_summary,
+            importance: go.importance_score,
+            ...(go.tag !== "Untagged" ? { tag: go.tag } : {}),
+            ...(!go.active ? { active: false } : {}),
+        };
+        if (children.length > 0 && depth < maxDepth) {
+            node.children = children.map((c) => buildNode(c, depth + 1));
+        }
+        else if (go.child_count > 0) {
+            // Depth cutoff (or filtered out) — summarize what's below
+            node.children_summary = go.subtree_summary;
+            node.child_count = go.child_count;
+        }
+        return node;
+    };
+    const roots = (byParent.get(null) ?? [])
+        .filter((go) => included === null || included.has(go.file_id_local))
         .sort((a, b) => b.importance_score - a.importance_score);
     const response = {
         scene: params.scene,
         ...(resolvedFrom !== undefined ? { resolved_from: resolvedFrom, is_variant: true } : {}),
-        roots: roots.map((go) => ({
-            name: go.name,
-            components: go.component_summary,
-            children_summary: go.subtree_summary,
-            importance: go.importance_score,
-            ...(go.tag !== "Untagged" ? { tag: go.tag } : {}),
-            ...(!go.active ? { active: false } : {}),
-        })),
+        total_game_objects: allGOs.length,
+        max_depth: maxDepth,
+        roots: roots.map((go) => buildNode(go, 0)),
     };
     return { token_hint: estimateTokens(response), ...response };
 }
@@ -72,12 +101,13 @@ export function handleGetPrefabStructure(store, params) {
     });
 }
 export function handleListScripts(store, params) {
-    const scripts = store.listScripts({
+    const all = store.listScripts({
         namespace: params.namespace,
         baseClass: params.base_class,
         assembly: params.assembly,
         isMonoBehaviour: params.is_monobehaviour,
     });
+    const scripts = bound(all, params.limit, 200);
     const response = {
         scripts: scripts.map((s) => ({
             class_name: s.class_name,
@@ -88,7 +118,8 @@ export function handleListScripts(store, params) {
             ...(s.is_generated ? { is_generated: true } : {}),
             complexity: s.complexity_score,
         })),
-        total: scripts.length,
+        total: all.length,
+        ...(scripts.length < all.length ? { truncated: true, returned: scripts.length } : {}),
     };
     return { token_hint: estimateTokens(response), ...response };
 }
@@ -98,12 +129,14 @@ export function handleListAssets(store, params) {
     const filtered = typeFilter !== undefined
         ? files.filter((f) => f.summary_line.toLowerCase().includes(typeFilter.toLowerCase()))
         : files;
+    const assets = bound(filtered, params.limit, 200);
     const response = {
-        assets: filtered.map((f) => ({
+        assets: assets.map((f) => ({
             path: store.prefixPath(f.path),
             summary: f.summary_line,
         })),
         total: filtered.length,
+        ...(assets.length < filtered.length ? { truncated: true, returned: assets.length } : {}),
     };
     return { token_hint: estimateTokens(response), ...response };
 }
@@ -335,9 +368,11 @@ export function handleFindReferences(store, params) {
             });
         }
     }
+    const boundedRefs = bound(refs, params.limit, 200);
+    const boundedCodeRefs = bound(codeRefs, params.limit, 200);
     const response = {
         guid,
-        references: refs.map((r) => {
+        references: boundedRefs.map((r) => {
             const sourceFile = store.getFileById(r.source_file_id);
             return {
                 source_file: sourceFile
@@ -348,7 +383,10 @@ export function handleFindReferences(store, params) {
             };
         }),
         total: refs.length + codeRefs.length,
-        ...(codeRefs.length > 0 ? { code_references: codeRefs } : {}),
+        ...(boundedRefs.length < refs.length || boundedCodeRefs.length < codeRefs.length
+            ? { truncated: true, returned: boundedRefs.length + boundedCodeRefs.length }
+            : {}),
+        ...(boundedCodeRefs.length > 0 ? { code_references: boundedCodeRefs } : {}),
     };
     return { token_hint: estimateTokens(response), ...response };
 }
@@ -390,9 +428,10 @@ export function handleFindDependencies(store, params) {
         return { token_hint: 10, error: `Cannot resolve: ${params.guid_or_name}` };
     }
     const refs = store.getReferencesFromFile(fileId);
+    const boundedDeps = bound(refs, params.limit, 200);
     const response = {
         source: params.guid_or_name,
-        dependencies: refs.map((r) => {
+        dependencies: boundedDeps.map((r) => {
             const targetFile = r.target_file_id !== null ? store.getFileById(r.target_file_id) : null;
             return {
                 target_guid: r.target_guid,
@@ -402,6 +441,7 @@ export function handleFindDependencies(store, params) {
             };
         }),
         total: refs.length,
+        ...(boundedDeps.length < refs.length ? { truncated: true, returned: boundedDeps.length } : {}),
     };
     return { token_hint: estimateTokens(response), ...response };
 }
@@ -435,8 +475,8 @@ export function handleSearch(store, params) {
                 summary = file?.summary_line;
             }
             else if (r.type === "game_object") {
-                // label is the GO name
-                path = r.label;
+                // Show which scene/prefab the GameObject lives in
+                path = r.file_path !== undefined ? store.prefixPath(r.file_path) : r.label;
             }
             else if (r.type === "script") {
                 // label is class_name
@@ -482,26 +522,31 @@ export function handleFindComponents(store, params) {
             }
         }
     }
+    const boundedComps = bound(components, params.limit, 100);
     const response = {
         type: params.type,
-        components: components.map((c) => {
+        components: boundedComps.map((c) => {
             const go = store.getGameObjectById(c.game_object_id);
+            const goFile = go ? store.getFileById(go.file_id) : undefined;
             return {
                 game_object_id: c.game_object_id,
                 game_object_name: go?.name ?? null,
+                ...(goFile ? { file: store.prefixPath(goFile.path) } : {}),
                 field_summary: c.field_summary,
                 script_guid: c.script_guid,
             };
         }),
         total: components.length,
+        ...(boundedComps.length < components.length
+            ? { truncated: true, returned: boundedComps.length }
+            : {}),
     };
     return { token_hint: estimateTokens(response), ...response };
 }
 export function handleRecentChanges(store, params) {
     const limit = params.limit ?? 50;
-    const changes = store.getRecentChanges(limit);
-    const sinceFilter = params.since;
-    const filtered = sinceFilter !== undefined ? changes.filter((c) => c.changed_at > sinceFilter) : changes;
+    // since is applied in SQL so the limit doesn't eat matching rows
+    const filtered = store.getRecentChanges(limit, params.since);
     const response = {
         changes: filtered.map((c) => ({
             path: store.prefixPath(c.path),
@@ -621,10 +666,15 @@ export function registerTools(server, resolveStore) {
         content: [{ type: "text", text: JSON.stringify(obj) }],
     });
     server.registerTool("get_scene_hierarchy", {
-        description: "Get the GameObject hierarchy for a scene or prefab file.",
+        description: "Get the GameObject hierarchy (nested tree) for a scene or prefab file. " +
+            "Children beyond the depth cutoff are summarized via children_summary/child_count.",
         inputSchema: {
             scene: z.string().describe("Relative path to the scene or prefab file"),
-            depth: z.number().int().optional().describe("Max depth to include (0 = roots only)"),
+            depth: z
+                .number()
+                .int()
+                .optional()
+                .describe("Max child depth to expand (0 = roots only, default 2)"),
             filter: z.string().optional().describe("Filter by name or tag substring"),
             project: z
                 .string()
@@ -636,7 +686,11 @@ export function registerTools(server, resolveStore) {
         description: "Get the GameObject structure for a prefab file.",
         inputSchema: {
             prefab: z.string().describe("Relative path to the prefab file"),
-            depth: z.number().int().optional().describe("Max depth to include"),
+            depth: z
+                .number()
+                .int()
+                .optional()
+                .describe("Max child depth to expand (0 = roots only, default 2)"),
             filter: z.string().optional().describe("Filter by name or tag substring"),
             project: z
                 .string()
@@ -651,6 +705,7 @@ export function registerTools(server, resolveStore) {
             base_class: z.string().optional().describe("Filter by base class"),
             assembly: z.string().optional().describe("Filter by assembly name"),
             is_monobehaviour: z.boolean().optional().describe("Filter MonoBehaviour scripts only"),
+            limit: z.number().int().optional().describe("Max results to return (default 200)"),
             project: z
                 .string()
                 .optional()
@@ -661,6 +716,7 @@ export function registerTools(server, resolveStore) {
         description: "List Unity asset files (.asset), optionally filtered by type.",
         inputSchema: {
             type: z.string().optional().describe("Filter by asset type name substring"),
+            limit: z.number().int().optional().describe("Max results to return (default 200)"),
             project: z
                 .string()
                 .optional()
@@ -741,6 +797,7 @@ export function registerTools(server, resolveStore) {
                 .max(10)
                 .optional()
                 .describe("Traversal depth (1 = direct refs, >1 = transitive via graph)"),
+            limit: z.number().int().optional().describe("Max references to return (default 200)"),
             project: z
                 .string()
                 .optional()
@@ -758,6 +815,7 @@ export function registerTools(server, resolveStore) {
                 .max(10)
                 .optional()
                 .describe("Traversal depth (1 = direct deps, >1 = transitive via graph)"),
+            limit: z.number().int().optional().describe("Max dependencies to return (default 200)"),
             project: z
                 .string()
                 .optional()
@@ -789,10 +847,12 @@ export function registerTools(server, resolveStore) {
         },
     }, (params) => toContent(handleSearch(resolveStore(params.project), params)));
     server.registerTool("find_components", {
-        description: "Find all GameObjects that have a specific component type attached.",
+        description: "Find all GameObjects that have a specific component type attached. " +
+            "Accepts built-in types (Rigidbody, Canvas) and custom script class names; case-insensitive.",
         inputSchema: {
             type: z.string().describe("Component type name"),
             scene: z.string().optional().describe("Limit search to this scene or prefab file"),
+            limit: z.number().int().optional().describe("Max results to return (default 100)"),
             project: z
                 .string()
                 .optional()

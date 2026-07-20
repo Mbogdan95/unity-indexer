@@ -10,7 +10,7 @@ export function parsePrefab(content: string): ParsedPrefab {
   let sourcePrefabGuid: string | null = null;
 
   for (const doc of docs) {
-    if (doc.classId === 1001 || doc.classId === 1101) {
+    if (doc.classId === 1001) {
       const typeName = Object.keys(doc.data)[0];
       if (!typeName) continue;
       const data = doc.data[typeName] as Record<string, unknown>;
@@ -23,7 +23,7 @@ export function parsePrefab(content: string): ParsedPrefab {
   }
 
   for (const doc of docs) {
-    if (doc.classId === 1001 || doc.classId === 1101) {
+    if (doc.classId === 1001) {
       const refs = extractReferences(doc.data, `PrefabInstance:${doc.fileId}`);
       for (const ref of refs) {
         ref.refType = "prefab_variant";

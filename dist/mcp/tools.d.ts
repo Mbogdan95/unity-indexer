@@ -16,9 +16,11 @@ export declare function handleListScripts(store: Store, params: {
     base_class?: string;
     assembly?: string;
     is_monobehaviour?: boolean;
+    limit?: number;
 }): object;
 export declare function handleListAssets(store: Store, params: {
     type?: string;
+    limit?: number;
 }): object;
 export declare function handleGetGameObject(store: Store, params: {
     scene: string;
@@ -39,10 +41,12 @@ export declare function handleGetScriptMember(store: Store, params: {
 export declare function handleFindReferences(store: Store, params: {
     guid_or_name: string;
     depth?: number;
+    limit?: number;
 }): object;
 export declare function handleFindDependencies(store: Store, params: {
     guid_or_name: string;
     depth?: number;
+    limit?: number;
 }): object;
 export declare function handleResolveGuid(store: Store, params: {
     guid: string;
@@ -54,6 +58,7 @@ export declare function handleSearch(store: Store, params: {
 export declare function handleFindComponents(store: Store, params: {
     type: string;
     scene?: string;
+    limit?: number;
 }): object;
 export declare function handleRecentChanges(store: Store, params: {
     since?: string;

@@ -7,8 +7,7 @@
   "files": [
     "dist/",
     "skills/",
-    "hooks/",
-    "mcp.json"
+    "hooks/"
   ],
   "exports": {
     ".": {

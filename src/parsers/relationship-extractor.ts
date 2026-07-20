@@ -288,19 +288,42 @@ function typeNamesFromNode(typeNode: Node): string[] {
   }
 }
 
-export function extractRelationships(content: string): ExtractedRelationship[] {
+function parseContent(content: string) {
   const parser = getParser();
   if (!parser) {
     throw new Error("Script parser not initialized. Call initScriptParser() first.");
   }
+  return parser.parse(content);
+}
 
-  const tree = parser.parse(content);
+/** Parse once and run both relationship extractions on the same tree. */
+export function extractAllRelationships(content: string): {
+  relationships: ExtractedRelationship[];
+  typeReferences: ExtractedRelationship[];
+} {
+  const tree = parseContent(content);
+  if (!tree) return { relationships: [], typeReferences: [] };
+  const result = {
+    relationships: extractRelationshipsFromRoot(tree.rootNode),
+    typeReferences: extractTypeReferencesFromRoot(tree.rootNode),
+  };
+  tree.delete();
+  return result;
+}
+
+export function extractRelationships(content: string): ExtractedRelationship[] {
+  const tree = parseContent(content);
   if (!tree) return [];
+  const result = extractRelationshipsFromRoot(tree.rootNode);
+  tree.delete();
+  return result;
+}
 
+function extractRelationshipsFromRoot(rootNode: Node): ExtractedRelationship[] {
   const results: ExtractedRelationship[] = [];
-  const classBodies = collectClassBodies(tree.rootNode);
+  const classBodies = collectClassBodies(rootNode);
 
-  walkAll(tree.rootNode, (node) => {
+  walkAll(rootNode, (node) => {
     const sourceClassName = findSourceClass(node.startIndex, classBodies);
     if (!sourceClassName) return;
 
@@ -420,23 +443,22 @@ export function extractRelationships(content: string): ExtractedRelationship[] {
     }
   }
 
-  tree.delete();
   return deduped;
 }
 
 export function extractTypeReferences(content: string): ExtractedRelationship[] {
-  const parser = getParser();
-  if (!parser) {
-    throw new Error("Script parser not initialized. Call initScriptParser() first.");
-  }
-
-  const tree = parser.parse(content);
+  const tree = parseContent(content);
   if (!tree) return [];
+  const result = extractTypeReferencesFromRoot(tree.rootNode);
+  tree.delete();
+  return result;
+}
 
+function extractTypeReferencesFromRoot(rootNode: Node): ExtractedRelationship[] {
   const results: ExtractedRelationship[] = [];
-  const classBodies = collectClassBodies(tree.rootNode);
+  const classBodies = collectClassBodies(rootNode);
 
-  walkAll(tree.rootNode, (node) => {
+  walkAll(rootNode, (node) => {
     const sourceClassName = findSourceClass(node.startIndex, classBodies);
     if (!sourceClassName) return;
 
@@ -490,6 +512,5 @@ export function extractTypeReferences(content: string): ExtractedRelationship[] 
     }
   }
 
-  tree.delete();
   return deduped;
 }

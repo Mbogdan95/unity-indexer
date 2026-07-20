@@ -28,15 +28,15 @@ describe("Indexer", () => {
     const files = store.listFiles();
     expect(files.length).toBeGreaterThan(0);
     const scenes = store.listFiles("scene");
-    expect(scenes.length).toBe(1);
-    expect(scenes[0].path).toContain("MainScene.unity");
+    expect(scenes.length).toBe(2);
+    expect(scenes.some((s) => s.path.includes("MainScene.unity"))).toBe(true);
   });
 
   it("indexes scene GameObjects and components", () => {
     indexer.indexAll();
     const scenes = store.listFiles("scene");
-    expect(scenes.length).toBe(1);
-    const sceneFile = scenes[0];
+    expect(scenes.length).toBe(2);
+    const sceneFile = scenes.find((s) => s.path.includes("MainScene.unity"))!;
     const gameObjects = store.getGameObjectsByFile(sceneFile.id);
     const player = gameObjects.find((go) => go.name === "Player");
     expect(player).toBeDefined();
@@ -75,7 +75,7 @@ describe("Indexer", () => {
   it("generates project summary", () => {
     indexer.indexAll();
     const summary = store.getProjectSummary();
-    expect(summary.scene_count).toBe(1);
+    expect(summary.scene_count).toBe(2);
     expect(summary.script_count).toBeGreaterThan(0);
   });
 
@@ -119,5 +119,42 @@ describe("Indexer", () => {
 
     const outgoing = store.graph.getOutgoing(hsNodeId, ["USES"]);
     expect(outgoing.some((n) => n.nodeId === pcNodeId)).toBe(true);
+  });
+});
+
+describe("Indexer — incremental cross-file edge relinking", () => {
+  it("re-links INHERITS edges from dependent files after a base class file changes", async () => {
+    const { mkdtempSync, cpSync, appendFileSync, rmSync } = await import("fs");
+    const { tmpdir } = await import("os");
+    const { join: joinPath } = await import("path");
+
+    const tmp = mkdtempSync(joinPath(tmpdir(), "unity-idx-test-"));
+    try {
+      cpSync(FIXTURES, tmp, { recursive: true });
+      const tmpStore = new Store(":memory:");
+      const tmpIndexer = new Indexer(tmpStore, tmp);
+      tmpIndexer.indexAll();
+
+      const before = tmpStore.getScriptByClassName("PlayerController")!;
+      const bossBefore = tmpStore.graph.getIncoming(`script:${String(before.id)}`, ["INHERITS"]);
+      expect(bossBefore.length).toBeGreaterThan(0);
+
+      // Simulate a watcher edit: content change → script rows re-inserted with new ids
+      appendFileSync(joinPath(tmp, "Assets/Scripts/PlayerController.cs"), "\n// touched\n");
+      tmpIndexer.flushChanges(new Map([["Assets/Scripts/PlayerController.cs", "change"]]));
+
+      const after = tmpStore.getScriptByClassName("PlayerController")!;
+      expect(after.id).not.toBe(before.id);
+
+      // No dangling edges may remain...
+      expect(tmpStore.deleteDanglingScriptEdges()).toBe(0);
+      // ...and BossController's INHERITS edge must point at the NEW script id
+      const bossAfter = tmpStore.graph.getIncoming(`script:${String(after.id)}`, ["INHERITS"]);
+      expect(bossAfter.length).toBeGreaterThan(0);
+
+      tmpStore.close();
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

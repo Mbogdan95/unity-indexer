@@ -112,6 +112,14 @@ export function handleFindPath(store, params) {
             summary: `No path found between ${params.from} and ${params.to}`,
         };
     }
+    const maxDepth = params.max_depth ?? 10;
+    if (result.nodes.length - 1 > maxDepth) {
+        return {
+            token_hint: 10,
+            path: null,
+            summary: `Shortest path has length ${String(result.nodes.length - 1)}, which exceeds max_depth ${String(maxDepth)}`,
+        };
+    }
     const response = {
         path: result.nodes.map((nodeId) => {
             const { type } = decodeNodeId(nodeId);
@@ -191,22 +199,50 @@ export function handleFindImplementors(store, params) {
     }
     const nodeId = encodeNodeId("script", script.id);
     const incoming = store.graph.getIncoming(nodeId, ["IMPLEMENTS"]);
-    const implementors = incoming
-        .map((n) => {
-        const { type, id } = decodeNodeId(n.nodeId);
-        if (type !== "script")
-            return null;
+    const seen = new Set();
+    const implementors = [];
+    const addScript = (id, via) => {
+        if (seen.has(id))
+            return false;
+        seen.add(id);
         const implScript = store.getScriptById(id);
         if (!implScript)
-            return null;
+            return false;
         const file = store.getFileById(implScript.file_id);
-        return {
+        implementors.push({
             class_name: implScript.class_name,
             file_path: store.prefixPath(file?.path ?? ""),
             ...(implScript.namespace ? { namespace: implScript.namespace } : {}),
-        };
-    })
-        .filter((x) => x !== null);
+            ...(via !== undefined ? { via } : {}),
+        });
+        return true;
+    };
+    const directIds = [];
+    for (const n of incoming) {
+        const { type, id } = decodeNodeId(n.nodeId);
+        if (type !== "script")
+            continue;
+        if (addScript(id))
+            directIds.push(id);
+    }
+    // Subclasses of implementors also implement the interface
+    if (params.include_subclasses !== false) {
+        const queue = [...directIds];
+        while (queue.length > 0) {
+            const parentId = queue.shift();
+            if (parentId === undefined)
+                break;
+            const parentName = store.getScriptById(parentId)?.class_name ?? "";
+            const subs = store.graph.getIncoming(encodeNodeId("script", parentId), ["INHERITS"]);
+            for (const sub of subs) {
+                const { type, id } = decodeNodeId(sub.nodeId);
+                if (type !== "script")
+                    continue;
+                if (addScript(id, `inherits ${parentName}`))
+                    queue.push(id);
+            }
+        }
+    }
     const response = {
         interface_name: params.interface_name,
         implementors,
@@ -318,9 +354,14 @@ export function registerGraphTools(server, resolveStore) {
         },
     }, (params) => toContent(handleGetGraphStats(resolveStore(params.project), params)));
     server.registerTool("find_implementors", {
-        description: "Find all classes that implement a given interface. Answers: 'who implements IMyInterface?'",
+        description: "Find all classes that implement a given interface, including subclasses of implementors. " +
+            "Answers: 'who implements IMyInterface?'",
         inputSchema: {
             interface_name: z.string().describe("Interface class name (e.g. 'ISceneLoader')"),
+            include_subclasses: z
+                .boolean()
+                .optional()
+                .describe("Include subclasses of implementors (default true)"),
             project: z
                 .string()
                 .optional()
